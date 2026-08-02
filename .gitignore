@@ -1,0 +1,21 @@
+# Binaries and build output
+bin/
+/out/
+*.exe
+*.test
+
+# Environment and secrets
+.env
+*.local.env
+
+# Go workspace sum (kept out of VCS; regenerate with go work sync)
+go.work.sum
+
+# Editor and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Coverage
+coverage.out
+coverage.html
