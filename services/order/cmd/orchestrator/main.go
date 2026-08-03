@@ -71,9 +71,17 @@ func run() error {
 		confirm: command.NewConfirmOrderHandler(repo, system.Clock{}, logger, tracer),
 		cancel:  command.NewCancelOrderHandler(repo, system.Clock{}, logger, tracer),
 	}
+	var paymentGateway saga.PaymentGateway
+	if cfg.Saga.PaymentBaseURL != "" {
+		paymentGateway = payment.NewClient(cfg.Saga.PaymentBaseURL, cfg.Saga.HTTPTimeout)
+		logger.Info("payment gateway: service", slog.String("url", cfg.Saga.PaymentBaseURL))
+	} else {
+		paymentGateway = payment.NewStubGateway(cfg.Saga.PaymentOutcome)
+		logger.Info("payment gateway: stub", slog.String("outcome", cfg.Saga.PaymentOutcome))
+	}
 	orch := saga.NewOrchestrator(
 		inventory.NewClient(cfg.Saga.InventoryBaseURL, cfg.Saga.HTTPTimeout),
-		payment.NewStubGateway(cfg.Saga.PaymentOutcome),
+		paymentGateway,
 		orders,
 		postgres.NewSagaRepository(pool),
 		logger,

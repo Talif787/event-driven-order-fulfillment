@@ -22,6 +22,10 @@ help:
 	@echo "  compose-down     Stop the local stack"
 	@echo "  smoke            Print the end-to-end smoke-test steps"
 	@echo "  saga-smoke       Print the end-to-end saga demo (confirm and compensate)"
+	@echo "  pay-build        Build the Payment service (mvn package)"
+	@echo "  pay-test         Run the Payment service tests (mvn test)"
+	@echo "  pay-run          Run the Payment service locally"
+	@echo "  pay-smoke        Print the payment capture and webhook demo"
 
 tidy:
 	cd $(SERVICE_DIR) && go mod tidy
@@ -80,7 +84,7 @@ smoke:
 
 saga-smoke:
 	@echo "End-to-end saga demo (stack up: make compose-up)."
-	@echo "The orchestrator reacts to order.placed automatically: reserve, pay (stub), commit, confirm."
+	@echo "The orchestrator reacts to order.placed automatically: reserve, pay, commit, confirm."
 	@echo ""
 	@echo "SUCCESS PATH (stub approves by default):"
 	@echo "1. Seed stock for the sample order's SKU:"
@@ -94,8 +98,9 @@ saga-smoke:
 	@echo "   curl -s localhost:8081/v1/reservations/<order-id-from-step-2>"
 	@echo ""
 	@echo "COMPENSATION PATH (force a decline):"
-	@echo "5. Set PAYMENT_STUB_OUTCOME: decline on the orchestrator service in docker-compose.yml, then recreate it:"
-	@echo "   docker compose up -d orchestrator"
+	@echo "5. Recreate the Payment service to decline (the saga now calls the real service):"
+	@echo "   PAYMENT_GATEWAY_OUTCOME=decline docker compose up -d payment-api"
+	@echo "   (tip: docker compose logs -f orchestrator shows the saga cancel in real time)"
 	@echo "6. Place another order:"
 	@echo "   curl -s -XPOST localhost:8080/v1/orders -H 'Content-Type: application/json' \\"
 	@echo "     -H 'Idempotency-Key: saga-decline-1' -d @docs/sample-order.json"
@@ -103,8 +108,8 @@ saga-smoke:
 	@echo "   curl -s localhost:8080/v1/orders/<order-id-from-step-6>"
 	@echo "   curl -s localhost:8081/v1/stock/SKU-CLASSIC-TEE"
 	@echo ""
-	@echo "8. Restore the approving orchestrator: set PAYMENT_STUB_OUTCOME back to approve, then:"
-	@echo "   docker compose up -d orchestrator"
+	@echo "8. Restore approvals:"
+	@echo "   docker compose up -d payment-api"
 
 clean:
 	rm -rf bin
@@ -158,3 +163,37 @@ inv-smoke:
 	@echo "5. Read the reservation:"
 	@echo "   curl -s localhost:8081/v1/reservations/11111111-1111-1111-1111-111111111111"
 
+
+# ============================================================================
+# Payment service (Phase 4). Java/Spring Boot module; runs on ports 8082/5434.
+# ============================================================================
+PAYMENT_DIR := services/payment
+
+.PHONY: pay-build pay-test pay-run pay-smoke
+
+pay-build:
+	cd $(PAYMENT_DIR) && mvn -q -DskipTests package
+
+pay-test:
+	cd $(PAYMENT_DIR) && mvn -q test
+
+pay-run:
+	cd $(PAYMENT_DIR) && DATABASE_URL="jdbc:postgresql://localhost:5434/payment" mvn -q spring-boot:run
+
+pay-smoke:
+	@echo "Payment smoke test (stack up: make compose-up). API on :8082."
+	@echo "The saga calls this service on every order; these steps drive it directly."
+	@echo ""
+	@echo "1. Place an order; the saga captures a payment for it:"
+	@echo "   curl -s -XPOST localhost:8080/v1/orders -H 'Content-Type: application/json' -H 'Idempotency-Key: pay-demo-1' -d @docs/sample-order.json"
+	@echo "2. Read the payment back (status CAPTURED, approved true, a psp_ reference):"
+	@echo "   curl -s localhost:8082/v1/payments/<order-id-from-step-1>"
+	@echo "3. Sign a settlement webhook for that payment's providerReference and post it:"
+	@echo "   BODY='{\"eventId\":\"evt-1\",\"type\":\"payment.settled\",\"providerReference\":\"<ref>\"}'"
+	@echo "   SIG=\$$(printf '%s' \"\$$BODY\" | openssl dgst -sha256 -hmac whsec_local_dev_secret | sed 's/^.* //')"
+	@echo "   curl -s -XPOST localhost:8082/v1/payments/webhooks -H \"X-Signature: \$$SIG\" -H 'Content-Type: application/json' -d \"\$$BODY\""
+	@echo "4. Read it back (status now SETTLED):"
+	@echo "   curl -s localhost:8082/v1/payments/<order-id-from-step-1>"
+	@echo ""
+	@echo "An unsigned webhook returns 401; a duplicate eventId is a no-op. Skip the webhook"
+	@echo "and the reconciliation sweep settles it on its own after about two minutes."

@@ -29,6 +29,7 @@ type SagaConfig struct {
 	GroupID          string
 	Topics           []string
 	InventoryBaseURL string
+	PaymentBaseURL   string
 	PaymentOutcome   string
 	HTTPTimeout      time.Duration
 }
@@ -118,6 +119,7 @@ func Load() (Config, error) {
 			GroupID:          env("SAGA_GROUP_ID", "order-saga"),
 			Topics:           envList("SAGA_TOPICS", []string{"orders.events"}),
 			InventoryBaseURL: env("INVENTORY_BASE_URL", "http://localhost:8081"),
+			PaymentBaseURL:   env("PAYMENT_BASE_URL", ""),
 			PaymentOutcome:   env("PAYMENT_STUB_OUTCOME", "approve"),
 			HTTPTimeout:      envDuration("SAGA_HTTP_TIMEOUT", 5*time.Second),
 		},
