@@ -85,6 +85,40 @@ func (o *Order) apply(e DomainEvent) {
 		o.shipTo = ev.ShipTo
 		o.total = ev.Total
 		o.status = StatusPending
+	case OrderConfirmed:
+		o.status = StatusConfirmed
+	case OrderCancelled:
+		o.status = StatusCancelled
+	}
+}
+
+// Confirm transitions a pending order to confirmed. It is the saga success
+// terminal. Confirming an already-confirmed order is an idempotent no-op (no new
+// event); confirming a cancelled order is an illegal transition.
+func (o *Order) Confirm(now time.Time) error {
+	switch o.status {
+	case StatusConfirmed:
+		return nil
+	case StatusPending:
+		o.raise(OrderConfirmed{OrderID: o.id, ConfirmedAt: now.UTC()})
+		return nil
+	default:
+		return fmt.Errorf("%w: cannot confirm a %s order", ErrInvalidTransition, o.status)
+	}
+}
+
+// Cancel transitions a pending order to cancelled. It is the saga compensation
+// terminal. Cancelling an already-cancelled order is an idempotent no-op;
+// cancelling a confirmed order is an illegal transition.
+func (o *Order) Cancel(reason string, now time.Time) error {
+	switch o.status {
+	case StatusCancelled:
+		return nil
+	case StatusPending:
+		o.raise(OrderCancelled{OrderID: o.id, Reason: reason, CancelledAt: now.UTC()})
+		return nil
+	default:
+		return fmt.Errorf("%w: cannot cancel a %s order", ErrInvalidTransition, o.status)
 	}
 }
 
