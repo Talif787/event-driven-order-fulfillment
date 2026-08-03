@@ -132,6 +132,32 @@ services:
         condition: service_completed_successfully
     restart: on-failure
 
+  orchestrator:
+    build:
+      context: ./services/order
+      target: orchestrator
+    environment:
+      SERVICE_NAME: order-service
+      ENVIRONMENT: development
+      DATABASE_URL: postgres://order:order@postgres:5432/order?sslmode=disable
+      KAFKA_BROKERS: kafka:9092
+      SAGA_GROUP_ID: order-saga
+      SAGA_TOPICS: orders.events
+      INVENTORY_BASE_URL: http://inventory-api:8080
+      PAYMENT_STUB_OUTCOME: decline
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      inventory-api:
+        condition: service_started
+    restart: on-failure
   # ---------------------------------------------------------------------------
   # Inventory service (Phase 3). Own Postgres instance: database per service.
   # ---------------------------------------------------------------------------

@@ -2,24 +2,26 @@ SERVICE_DIR := services/order
 DATABASE_URL ?= postgres://order:order@localhost:5432/order?sslmode=disable
 KAFKA_BROKERS ?= localhost:29092
 
-.PHONY: help tidy build test test-integration vet run run-relay run-projector \
-        migrate-up migrate-down docker-build compose-up compose-down smoke clean
+.PHONY: help tidy build test test-integration vet run run-relay run-projector run-orchestrator \
+        migrate-up migrate-down docker-build compose-up compose-down smoke saga-smoke clean
 
 help:
 	@echo "Targets:"
 	@echo "  tidy             Resolve module dependencies (requires network)"
-	@echo "  build            Build api, migrate, relay, and projector binaries"
+	@echo "  build            Build api, migrate, relay, projector, and orchestrator binaries"
 	@echo "  test             Run unit tests"
 	@echo "  test-integration Run integration tests (requires Docker)"
 	@echo "  vet              Run go vet"
 	@echo "  run              Run the api locally"
 	@echo "  run-relay        Run the outbox relay locally"
 	@echo "  run-projector    Run the projection consumer locally"
+	@echo "  run-orchestrator Run the saga orchestrator locally"
 	@echo "  migrate-up       Apply database migrations"
 	@echo "  migrate-down     Roll back the last migration"
-	@echo "  compose-up       Build and start the full local stack (db, kafka, api, relay, projector)"
+	@echo "  compose-up       Build and start the full local stack (db, kafka, order + inventory services)"
 	@echo "  compose-down     Stop the local stack"
 	@echo "  smoke            Print the end-to-end smoke-test steps"
+	@echo "  saga-smoke       Print the end-to-end saga demo (confirm and compensate)"
 
 tidy:
 	cd $(SERVICE_DIR) && go mod tidy
@@ -29,7 +31,8 @@ build:
 		go build -o ../../bin/api ./cmd/api && \
 		go build -o ../../bin/migrate ./cmd/migrate && \
 		go build -o ../../bin/relay ./cmd/relay && \
-		go build -o ../../bin/projector ./cmd/projector
+		go build -o ../../bin/projector ./cmd/projector && \
+		go build -o ../../bin/orchestrator ./cmd/orchestrator
 
 test:
 	cd $(SERVICE_DIR) && go test ./...
@@ -48,6 +51,9 @@ run-relay:
 
 run-projector:
 	cd $(SERVICE_DIR) && DATABASE_URL="$(DATABASE_URL)" KAFKA_BROKERS="$(KAFKA_BROKERS)" go run ./cmd/projector
+
+run-orchestrator:
+	cd $(SERVICE_DIR) && DATABASE_URL="$(DATABASE_URL)" KAFKA_BROKERS="$(KAFKA_BROKERS)" INVENTORY_BASE_URL="http://localhost:8081" PAYMENT_STUB_OUTCOME=approve go run ./cmd/orchestrator
 
 migrate-up:
 	cd $(SERVICE_DIR) && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/migrate up
@@ -71,6 +77,34 @@ smoke:
 	@echo "     --bootstrap-server localhost:9092 --topic orders.events --from-beginning --max-messages 1"
 	@echo "3. Read the order back (served from the projection once the projector catches up):"
 	@echo "   curl -s localhost:8080/v1/orders/<order-id-from-step-1>"
+
+saga-smoke:
+	@echo "End-to-end saga demo (stack up: make compose-up)."
+	@echo "The orchestrator reacts to order.placed automatically: reserve, pay (stub), commit, confirm."
+	@echo ""
+	@echo "SUCCESS PATH (stub approves by default):"
+	@echo "1. Seed stock for the sample order's SKU:"
+	@echo "   curl -s -XPUT localhost:8081/v1/stock/SKU-CLASSIC-TEE -H 'Content-Type: application/json' -d '{\"available\":100}'"
+	@echo "2. Place the sample order:"
+	@echo "   curl -s -XPOST localhost:8080/v1/orders -H 'Content-Type: application/json' \\"
+	@echo "     -H 'Idempotency-Key: saga-ok-1' -d @docs/sample-order.json"
+	@echo "3. Read it back after a second (status should be CONFIRMED):"
+	@echo "   curl -s localhost:8080/v1/orders/<order-id-from-step-2>"
+	@echo "4. The reservation should be COMMITTED:"
+	@echo "   curl -s localhost:8081/v1/reservations/<order-id-from-step-2>"
+	@echo ""
+	@echo "COMPENSATION PATH (force a decline):"
+	@echo "5. Set PAYMENT_STUB_OUTCOME: decline on the orchestrator service in docker-compose.yml, then recreate it:"
+	@echo "   docker compose up -d orchestrator"
+	@echo "6. Place another order:"
+	@echo "   curl -s -XPOST localhost:8080/v1/orders -H 'Content-Type: application/json' \\"
+	@echo "     -H 'Idempotency-Key: saga-decline-1' -d @docs/sample-order.json"
+	@echo "7. Read it back (status should be CANCELLED; the held stock is released):"
+	@echo "   curl -s localhost:8080/v1/orders/<order-id-from-step-6>"
+	@echo "   curl -s localhost:8081/v1/stock/SKU-CLASSIC-TEE"
+	@echo ""
+	@echo "8. Restore the approving orchestrator: set PAYMENT_STUB_OUTCOME back to approve, then:"
+	@echo "   docker compose up -d orchestrator"
 
 clean:
 	rm -rf bin
