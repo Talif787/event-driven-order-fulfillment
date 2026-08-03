@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"errors"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -19,14 +20,19 @@ type OrderView struct {
 	Version    int64
 }
 
-// GetOrderHandler serves order reads by folding the event stream.
+// GetOrderHandler serves single-order reads. It reads the denormalized
+// projection first (the CQRS read path) and falls back to folding the event
+// store when the projection has not yet caught up. The fallback preserves
+// read-your-writes immediately after placement while keeping the projection as
+// the primary, cheap read path.
 type GetOrderHandler struct {
-	repo   app.Repository
-	tracer trace.Tracer
+	projections app.ProjectionReader
+	repo        app.Repository
+	tracer      trace.Tracer
 }
 
-func NewGetOrderHandler(repo app.Repository, tracer trace.Tracer) *GetOrderHandler {
-	return &GetOrderHandler{repo: repo, tracer: tracer}
+func NewGetOrderHandler(projections app.ProjectionReader, repo app.Repository, tracer trace.Tracer) *GetOrderHandler {
+	return &GetOrderHandler{projections: projections, repo: repo, tracer: tracer}
 }
 
 func (h *GetOrderHandler) Handle(ctx context.Context, id string) (OrderView, error) {
@@ -37,6 +43,22 @@ func (h *GetOrderHandler) Handle(ctx context.Context, id string) (OrderView, err
 	if err != nil {
 		return OrderView{}, err
 	}
+
+	view, err := h.projections.GetOrder(ctx, oid.String())
+	if err == nil {
+		return OrderView{
+			OrderID:    view.OrderID,
+			CustomerID: view.CustomerID,
+			Status:     view.Status,
+			TotalMinor: view.TotalMinor,
+			Currency:   view.Currency,
+			Version:    view.Version,
+		}, nil
+	}
+	if !errors.Is(err, order.ErrNotFound) {
+		return OrderView{}, err
+	}
+
 	agg, err := h.repo.Load(ctx, oid)
 	if err != nil {
 		return OrderView{}, err

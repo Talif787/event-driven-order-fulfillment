@@ -50,9 +50,10 @@ func run() error {
 
 	repo := postgres.NewOrderRepository(pool)
 	idem := postgres.NewIdempotencyStore(pool)
+	projections := postgres.NewProjectionRepository(pool)
 
 	placeHandler := command.NewPlaceOrderHandler(repo, idem, system.IDGenerator{}, system.Clock{}, logger, tel.Tracer())
-	getHandler := query.NewGetOrderHandler(repo, tel.Tracer())
+	getHandler := query.NewGetOrderHandler(projections, repo, tel.Tracer())
 
 	handlers := httpapi.NewHandlers(placeHandler, getHandler, logger)
 	health := httpapi.NewHealthHandlers(pool)
