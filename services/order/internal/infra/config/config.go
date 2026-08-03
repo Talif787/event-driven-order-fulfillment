@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -18,6 +19,23 @@ type Config struct {
 	Telemetry   TelemetryConfig
 	Auth        AuthConfig
 	Timeouts    TimeoutConfig
+	Kafka       KafkaConfig
+	Relay       RelayConfig
+	Projector   ProjectorConfig
+}
+
+type KafkaConfig struct {
+	Brokers []string
+}
+
+type RelayConfig struct {
+	PollInterval time.Duration
+	BatchSize    int
+}
+
+type ProjectorConfig struct {
+	GroupID string
+	Topics  []string
 }
 
 type DatabaseConfig struct {
@@ -76,6 +94,17 @@ func Load() (Config, error) {
 			Idle:       envDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
 			Shutdown:   envDuration("HTTP_SHUTDOWN_TIMEOUT", 20*time.Second),
 		},
+		Kafka: KafkaConfig{
+			Brokers: envList("KAFKA_BROKERS", []string{"localhost:9092"}),
+		},
+		Relay: RelayConfig{
+			PollInterval: envDuration("RELAY_POLL_INTERVAL", time.Second),
+			BatchSize:    envInt("RELAY_BATCH_SIZE", 100),
+		},
+		Projector: ProjectorConfig{
+			GroupID: env("PROJECTOR_GROUP_ID", "order-projection"),
+			Topics:  envList("PROJECTOR_TOPICS", []string{"orders.events"}),
+		},
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
@@ -95,6 +124,12 @@ func (c Config) validate() error {
 	}
 	if c.Telemetry.SampleRatio < 0 || c.Telemetry.SampleRatio > 1 {
 		return fmt.Errorf("OTEL_TRACES_SAMPLER_RATIO must be within [0,1]")
+	}
+	if c.Relay.BatchSize <= 0 {
+		return fmt.Errorf("RELAY_BATCH_SIZE must be positive")
+	}
+	if len(c.Kafka.Brokers) == 0 {
+		return fmt.Errorf("KAFKA_BROKERS must not be empty")
 	}
 	return nil
 }
@@ -140,4 +175,22 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 		}
 	}
 	return fallback
+}
+
+func envList(key string, fallback []string) []string {
+	v, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(v) == "" {
+		return fallback
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	if len(out) == 0 {
+		return fallback
+	}
+	return out
 }

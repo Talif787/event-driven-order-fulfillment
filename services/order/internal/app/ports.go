@@ -40,3 +40,42 @@ type IDGenerator interface{ NewOrderID() order.OrderID }
 
 // Clock abstracts wall-clock time.
 type Clock interface{ Now() time.Time }
+
+// OutboxRecord is an unpublished outbox row read by the relay for publication.
+type OutboxRecord struct {
+	ID          int64
+	EventID     string
+	AggregateID string
+	Topic       string
+	EventType   string
+	Payload     []byte
+	Headers     map[string]string
+}
+
+// Publisher publishes outbox records to the event backbone. Delivery is
+// at-least-once; consumers deduplicate on EventID.
+type Publisher interface {
+	Publish(ctx context.Context, records []OutboxRecord) error
+}
+
+// OrderProjection is the denormalized read model of an order.
+type OrderProjection struct {
+	OrderID    string
+	CustomerID string
+	Status     string
+	TotalMinor int64
+	Currency   string
+	Version    int64
+	PlacedAt   time.Time
+}
+
+// ProjectionStore writes the order read model.
+type ProjectionStore interface {
+	UpsertOrderPlaced(ctx context.Context, p OrderProjection) error
+}
+
+// ProjectionReader reads the order read model. It returns order.ErrNotFound
+// when the projection has not yet caught up with the write model.
+type ProjectionReader interface {
+	GetOrder(ctx context.Context, orderID string) (OrderProjection, error)
+}

@@ -2,13 +2,13 @@ package command
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/orderfulfillment/order/internal/app"
+	"github.com/orderfulfillment/order/internal/contracts"
 	"github.com/orderfulfillment/order/internal/domain/order"
 )
 
@@ -133,27 +133,6 @@ func buildLineItems(lines []PlaceOrderLine) ([]order.LineItem, error) {
 	return items, nil
 }
 
-// orderPlacedPayload is the serialized shape of the integration event.
-type orderPlacedPayload struct {
-	OrderID    string          `json:"orderId"`
-	CustomerID string          `json:"customerId"`
-	Items      []payloadItem   `json:"items"`
-	ShipTo     payloadAddress  `json:"shipTo"`
-	TotalMinor int64           `json:"totalMinor"`
-	Currency   string          `json:"currency"`
-	PlacedAt   string          `json:"placedAt"`
-}
-
-type payloadItem struct {
-	SKU            string `json:"sku"`
-	Quantity       int32  `json:"quantity"`
-	UnitPriceMinor int64  `json:"unitPriceMinor"`
-}
-
-type payloadAddress struct {
-	Line1, Line2, City, Region, PostalCode, Country string
-}
-
 func toOutbox(agg *order.Order) ([]app.OutboxMessage, error) {
 	messages := make([]app.OutboxMessage, 0, len(agg.UncommittedChanges()))
 	for _, ev := range agg.UncommittedChanges() {
@@ -161,32 +140,34 @@ func toOutbox(agg *order.Order) ([]app.OutboxMessage, error) {
 		if !ok {
 			continue
 		}
-		items := make([]payloadItem, 0, len(placed.Items))
+		items := make([]contracts.LineItem, 0, len(placed.Items))
 		for _, it := range placed.Items {
-			items = append(items, payloadItem{SKU: it.SKU.String(), Quantity: it.Quantity.Value(), UnitPriceMinor: it.UnitPrice.MinorUnits})
+			items = append(items, contracts.LineItem{
+				SKU: it.SKU.String(), Quantity: it.Quantity.Value(), UnitPriceMinor: it.UnitPrice.MinorUnits,
+			})
 		}
-		payload := orderPlacedPayload{
+		event := contracts.OrderPlacedV1{
 			OrderID:    placed.OrderID.String(),
 			CustomerID: placed.CustomerID.String(),
 			Items:      items,
-			ShipTo: payloadAddress{
+			ShipTo: contracts.Address{
 				Line1: placed.ShipTo.Line1, Line2: placed.ShipTo.Line2, City: placed.ShipTo.City,
 				Region: placed.ShipTo.Region, PostalCode: placed.ShipTo.PostalCode, Country: placed.ShipTo.Country,
 			},
 			TotalMinor: placed.Total.MinorUnits,
 			Currency:   placed.Total.Currency,
-			PlacedAt:   placed.PlacedAt.Format("2006-01-02T15:04:05.000Z07:00"),
+			PlacedAt:   contracts.FormatTime(placed.PlacedAt),
 		}
-		raw, err := json.Marshal(payload)
+		raw, err := event.Marshal()
 		if err != nil {
-			return nil, fmt.Errorf("marshal outbox payload: %w", err)
+			return nil, err
 		}
 		messages = append(messages, app.OutboxMessage{
 			AggregateID: placed.OrderID.String(),
-			Topic:       "orders.events",
+			Topic:       contracts.TopicOrderEvents,
 			EventType:   string(ev.EventType()),
 			Payload:     raw,
-			Headers:     map[string]string{"content-type": "application/json"},
+			Headers:     map[string]string{contracts.HeaderContentType: "application/json"},
 		})
 	}
 	return messages, nil

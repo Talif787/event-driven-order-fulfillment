@@ -1,0 +1,19 @@
+{
+  "customerId": "22222222-2222-2222-2222-222222222222",
+  "items": [
+    {
+      "sku": "SKU-CLASSIC-TEE",
+      "quantity": 2,
+      "unitPriceMinor": 1500,
+      "currency": "USD"
+    }
+  ],
+  "shipTo": {
+    "line1": "1 Main St",
+    "line2": "Apt 4",
+    "city": "Boston",
+    "region": "MA",
+    "postalCode": "02118",
+    "country": "US"
+  }
+}

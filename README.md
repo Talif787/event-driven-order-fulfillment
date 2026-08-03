@@ -4,26 +4,53 @@ A production-oriented, event-driven order and fulfillment platform. This
 repository is being built in phases. Each phase is independently buildable and
 testable.
 
-## Phase 1 status (this drop): Order service, order-intake vertical slice
+## Status
 
-Delivered and runnable now:
+Phase 1 (delivered): the Order service order-intake vertical slice.
 
 - Event-sourced Order aggregate with full domain invariants and unit tests.
-- PlaceOrder use case with idempotency, and a GetOrder read that folds the
-  event stream.
+- PlaceOrder use case with idempotency.
 - Postgres event store plus a transactional outbox, written atomically, with
   optimistic concurrency.
-- REST API (place and get), JWT bearer auth (toggleable), correlation ids,
-  structured JSON logging, panic recovery, and OpenTelemetry tracing.
+- REST API, JWT bearer auth (toggleable), correlation ids, structured JSON
+  logging, panic recovery, and OpenTelemetry tracing.
 - Liveness and readiness probes, env-driven Twelve-Factor config, embedded SQL
   migrations with an up/down runner.
-- Unit tests, a Testcontainers integration test, a multi-stage distroless
-  Dockerfile, docker-compose for the full local stack, a Makefile, and an
-  OpenAPI 3.1 specification.
+- Unit and Testcontainers integration tests, a multi-stage distroless
+  Dockerfile, docker-compose, a Makefile, and an OpenAPI 3.1 specification.
 
-Deferred to later phases: Kafka publication of the outbox (CDC relay), the saga
-orchestrator and compensations, and the inventory, payment, fulfillment, and
-notification services. See the roadmap below.
+Phase 2 (this drop): the event backbone walking skeleton.
+
+- A Kafka producer (segmentio/kafka-go) that publishes with acknowledgement from
+  all in-sync replicas and partitions by aggregate id, so events for one order
+  keep their order.
+- An outbox relay worker (`cmd/relay`) that drains the transactional outbox to
+  Kafka and marks rows published, with at-least-once delivery.
+- The first consumer: an order projection worker (`cmd/projector`) that builds a
+  denormalized read model from the event stream.
+- `GET /v1/orders/{id}` now reads the projection first (the CQRS read path) and
+  falls back to folding the event store when the projection has not yet caught
+  up, preserving read-your-writes.
+- A shared integration-event contract (`internal/contracts`) so producer and
+  consumers agree on the wire format. This becomes the schema-registry subject
+  later.
+- Kafka, relay, and projector added to the local compose stack.
+
+## Design decision: polling relay now, Debezium later
+
+The outbox relay in this phase is the polling-publisher variant of the
+transactional outbox pattern. A worker selects unpublished rows (with
+`FOR UPDATE SKIP LOCKED` so multiple relay replicas can run), publishes them,
+and marks them published, all in one transaction. If publication fails the
+transaction rolls back and the rows are retried, which is what makes delivery
+at-least-once.
+
+The target architecture (see `docs/architecture.md`, ADR-2) uses log-based
+change data capture with Debezium for higher throughput and lower database load.
+That swap is a drop-in: the outbox table and the Kafka topic contract are
+identical, so consumers do not change. The polling relay was chosen for the
+walking skeleton because it is real, testable application code that runs without
+standing up Kafka Connect or reconfiguring Postgres for logical replication.
 
 ## Important build note
 
@@ -36,13 +63,14 @@ cd services/order
 go mod tidy
 ```
 
-That step requires network access to fetch modules. After it completes, the
-build, tests, Docker image, and compose stack work as documented.
+That step requires network access to fetch modules (including
+`github.com/segmentio/kafka-go`). After it completes, the build, tests, Docker
+images, and compose stack work as documented.
 
 ## Prerequisites
 
 - Go 1.23 or newer
-- Docker (for the integration test and the local stack)
+- Docker (for the integration tests and the local stack)
 
 ## Quick start (full local stack)
 
@@ -51,8 +79,32 @@ build, tests, Docker image, and compose stack work as documented.
 docker compose up --build -d
 ```
 
-This starts Postgres, applies migrations, and starts the API on
-`http://localhost:8080`.
+This starts Postgres and Kafka, applies migrations, and starts the API on
+`http://localhost:8080`, the outbox relay, and the projection consumer.
+
+## End-to-end smoke test
+
+With the stack up, this exercises the whole path: place an order, watch the
+relay publish it to Kafka, and read it back from the projection.
+
+```bash
+# 1. place an order
+curl -sS -X POST http://localhost:8080/v1/orders \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: smoke-1' \
+  -d @docs/sample-order.json
+
+# 2. see the event on the topic (the relay published it)
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic orders.events \
+  --from-beginning --max-messages 1
+
+# 3. read the order back; once the projector has consumed the event this is
+#    served from the projection, otherwise from the event-store fallback
+curl -sS http://localhost:8080/v1/orders/<orderId-from-step-1>
+```
+
+`make smoke` prints these steps.
 
 ## Local development
 
@@ -60,42 +112,20 @@ This starts Postgres, applies migrations, and starts the API on
 cd services/order
 go mod tidy          # once, to resolve deps and write go.sum
 go test ./...        # unit tests (no Docker required)
- RUN_INTEGRATION=1 go test ./test/integration/...   # integration tests (Docker)
+RUN_INTEGRATION=1 go test ./test/integration/...   # integration tests (Docker)
 
-# run the API against a local Postgres
+# run the pieces against a local Postgres and the compose Kafka
 export DATABASE_URL='postgres://order:order@localhost:5432/order?sslmode=disable'
+export KAFKA_BROKERS='localhost:29092'   # host-facing listener from compose
 go run ./cmd/migrate up
 go run ./cmd/api
+go run ./cmd/relay
+go run ./cmd/projector
 ```
 
 The Makefile at the repository root wraps these: `make tidy`, `make test`,
-`make test-integration`, `make run`, `make migrate-up`, `make compose-up`.
-
-## API examples
-
-Place an order (auth disabled locally, so `customerId` is taken from the body):
-
-```bash
-curl -sS -X POST http://localhost:8080/v1/orders \
-  -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: demo-key-0001' \
-  -d '{
-    "customerId": "11111111-1111-1111-1111-111111111111",
-    "items": [
-      {"sku": "SKU-1", "quantity": 2, "unitPriceMinor": 1500, "currency": "USD"}
-    ],
-    "shipTo": {"line1": "1 Main St", "city": "Boston", "region": "MA", "postalCode": "02118", "country": "US"}
-  }'
-```
-
-Sending the same `Idempotency-Key` again returns the same order and creates no
-duplicate. Read the order back:
-
-```bash
-curl -sS http://localhost:8080/v1/orders/<orderId>
-```
-
-The full contract is in `docs/openapi.yaml`.
+`make test-integration`, `make run`, `make run-relay`, `make run-projector`,
+`make migrate-up`, `make compose-up`, `make smoke`.
 
 ## Configuration
 
@@ -105,46 +135,60 @@ Notable values:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `HTTP_ADDR` | `:8080` | Listen address |
+| `HTTP_ADDR` | `:8080` | API listen address |
 | `DATABASE_URL` | local dsn | Postgres connection string |
 | `AUTH_ENABLED` | `false` | Enable JWT bearer auth |
-| `AUTH_JWT_SECRET` | empty | HS256 secret (required when auth is enabled) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | Enables tracing when set |
+| `KAFKA_BROKERS` | `localhost:9092` | Comma-separated brokers (compose services use `kafka:9092`, host tools use `localhost:29092`) |
+| `RELAY_POLL_INTERVAL` | `1s` | Outbox poll cadence when idle |
+| `RELAY_BATCH_SIZE` | `100` | Max outbox rows drained per cycle |
+| `PROJECTOR_GROUP_ID` | `order-projection` | Consumer group id |
+| `PROJECTOR_TOPICS` | `orders.events` | Topics the projector consumes |
 
 ## Project structure
 
 ```
 order-fulfillment/
   go.work                     Go workspace (adds services as phases land)
-  docker-compose.yml          Local stack: postgres, migrate, api
+  docker-compose.yml          Local stack: postgres, kafka, migrate, api, relay, projector
   Makefile                    Common developer tasks
   docs/
     openapi.yaml              OpenAPI 3.1 contract
-    architecture.md           Phase 1 architecture notes
+    architecture.md           Architecture notes and ADRs
+    sample-order.json         Smoke-test request body
   services/order/
     cmd/api                   API composition root
     cmd/migrate               Embedded migration runner
+    cmd/relay                 Outbox relay worker
+    cmd/projector             Order projection consumer
+    internal/contracts        Versioned integration event schemas (Kafka wire format)
     internal/domain/order     Event-sourced aggregate, value objects, events
-    internal/app              Use cases and ports
-    internal/infra            Postgres, config, logging, telemetry adapters
+    internal/app              Use cases and ports (command, query, projection)
+    internal/infra            Postgres, kafka, config, logging, telemetry adapters
+    internal/worker           Relay and projector run loops
     internal/presentation     HTTP edge, middleware, health
-    test/integration          Testcontainers integration test
+    test/integration          Testcontainers integration tests
 ```
 
 ## Testing
 
-- Unit tests cover domain invariants (totals, duplicate line rejection,
-  rehydration) and the PlaceOrder handler (idempotent replay creates no
-  duplicate).
-- The integration test starts real Postgres via Testcontainers, applies the
-  embedded migration, and asserts that placement persists exactly one event and
-  one outbox row and that idempotency holds across requests.
+- Unit tests cover domain invariants, the PlaceOrder handler, and the
+  integration-event contract round trip.
+- Integration tests start real Postgres via Testcontainers and cover: placement
+  persistence and idempotency; the relay draining the outbox, marking rows
+  published, and rolling back (leaving rows unpublished) when publication fails;
+  and the projection applying `order.placed.v1` idempotently.
+
+The relay and projection logic are tested against Postgres with a fake
+publisher, and the wire contract is unit tested. The broker round trip itself
+(producer to real Kafka to consumer) is verified by the compose smoke test above
+rather than an automated broker test, to keep the suite fast and hermetic. An
+automated end-to-end Kafka test can be added next if wanted.
 
 ## Roadmap
 
-- Phase 2: publish the outbox to Kafka via a change-data-capture relay
-  (Debezium), add the schema registry, and stand up the saga orchestrator with
-  compensations.
+- Event backbone hardening: saga orchestrator with compensations, the Cancel
+  command, the schema registry, and a dead-letter topic for poison messages.
 - Phase 3: Inventory service (Go) with reservations and optimistic concurrency.
 - Phase 4: Payment service (Java, Spring Boot) with idempotent capture and
   webhook reconciliation.
