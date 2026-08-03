@@ -74,3 +74,53 @@ smoke:
 
 clean:
 	rm -rf bin
+
+# ============================================================================
+# Inventory service (Phase 3). Own module and database; runs on ports 8081/5433.
+# ============================================================================
+INVENTORY_DIR := services/inventory
+INVENTORY_DATABASE_URL ?= postgres://inventory:inventory@localhost:5433/inventory?sslmode=disable
+
+.PHONY: inv-tidy inv-build inv-test inv-test-integration inv-vet inv-run \
+        inv-migrate-up inv-migrate-down inv-smoke
+
+inv-tidy:
+	cd $(INVENTORY_DIR) && go mod tidy
+
+inv-build:
+	cd $(INVENTORY_DIR) && \
+		go build -o ../../bin/inventory-api ./cmd/api && \
+		go build -o ../../bin/inventory-migrate ./cmd/migrate
+
+inv-test:
+	cd $(INVENTORY_DIR) && go test ./...
+
+inv-test-integration:
+	cd $(INVENTORY_DIR) && RUN_INTEGRATION=1 go test ./test/integration/...
+
+inv-vet:
+	cd $(INVENTORY_DIR) && go vet ./...
+
+inv-run:
+	cd $(INVENTORY_DIR) && DATABASE_URL="$(INVENTORY_DATABASE_URL)" go run ./cmd/api
+
+inv-migrate-up:
+	cd $(INVENTORY_DIR) && DATABASE_URL="$(INVENTORY_DATABASE_URL)" go run ./cmd/migrate up
+
+inv-migrate-down:
+	cd $(INVENTORY_DIR) && DATABASE_URL="$(INVENTORY_DATABASE_URL)" go run ./cmd/migrate down
+
+inv-smoke:
+	@echo "Inventory smoke test (stack up: make compose-up). API on :8081."
+	@echo "1. Seed stock for a SKU:"
+	@echo "   curl -s -XPUT localhost:8081/v1/stock/SKU-1 -H 'Content-Type: application/json' -d '{\"available\":100}'"
+	@echo "2. Reserve stock for an order (orderId must be a UUID):"
+	@echo "   curl -s -XPOST localhost:8081/v1/reservations -H 'Content-Type: application/json' \\"
+	@echo "     -d '{\"orderId\":\"11111111-1111-1111-1111-111111111111\",\"lines\":[{\"sku\":\"SKU-1\",\"quantity\":3}]}'"
+	@echo "3. Read the ledger (available down 3, reserved up 3):"
+	@echo "   curl -s localhost:8081/v1/stock/SKU-1"
+	@echo "4. Commit (or swap 'commit' for 'release' to compensate):"
+	@echo "   curl -s -XPOST localhost:8081/v1/reservations/11111111-1111-1111-1111-111111111111/commit"
+	@echo "5. Read the reservation:"
+	@echo "   curl -s localhost:8081/v1/reservations/11111111-1111-1111-1111-111111111111"
+
