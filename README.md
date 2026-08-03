@@ -36,6 +36,26 @@ Phase 2 (this drop): the event backbone walking skeleton.
   later.
 - Kafka, relay, and projector added to the local compose stack.
 
+Phase 3 (this drop): the Inventory service.
+
+- A new bounded context with its own Go module and its own database (database
+  per service), built as an independently buildable and testable vertical slice.
+- Reservation lifecycle: reserve (HELD), then commit (COMMITTED) or release
+  (RELEASED, the saga compensation). Reserving is all-or-nothing across lines.
+- Optimistic concurrency on the stock ledger: a version column guards every
+  write, and conflicting writes retry before surfacing a 409.
+- Idempotency keyed on order id (reserve, release, and commit are all
+  idempotent), enforced by a unique constraint plus idempotent aggregate
+  transitions.
+- REST API, toggleable JWT auth, correlation ids, structured logging, panic
+  recovery, OpenTelemetry, health probes, embedded migrations, unit and
+  Testcontainers tests, a multi-stage distroless Dockerfile, and compose wiring
+  (inventory API on :8081, its Postgres on :5433).
+
+The application use cases are transport-agnostic. The saga orchestrator will
+call inventory synchronously, so a gRPC adapter over the same use cases is the
+planned next increment; it is additive and leaves the domain untouched.
+
 ## Design decision: polling relay now, Debezium later
 
 The outbox relay in this phase is the polling-publisher variant of the
