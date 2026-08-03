@@ -12,8 +12,10 @@ import (
 
 // Topic and event type constants for the order stream.
 const (
-	TopicOrderEvents = "orders.events"
-	TypeOrderPlaced  = "order.placed.v1"
+	TopicOrderEvents   = "orders.events"
+	TypeOrderPlaced    = "order.placed.v1"
+	TypeOrderConfirmed = "order.confirmed.v1"
+	TypeOrderCancelled = "order.cancelled.v1"
 
 	// HeaderEventType and HeaderContentType are the Kafka header keys carried
 	// on every record so consumers can route without decoding the body.
@@ -79,6 +81,57 @@ func UnmarshalOrderPlaced(raw []byte) (OrderPlacedV1, error) {
 	var e OrderPlacedV1
 	if err := json.Unmarshal(raw, &e); err != nil {
 		return OrderPlacedV1{}, fmt.Errorf("unmarshal order.placed.v1: %w", err)
+	}
+	return e, nil
+}
+
+// OrderConfirmedV1 is the integration event emitted when the saga confirms an
+// order (stock committed, payment captured).
+type OrderConfirmedV1 struct {
+	OrderID     string `json:"orderId"`
+	ConfirmedAt string `json:"confirmedAt"`
+}
+
+// Marshal serializes the event body.
+func (e OrderConfirmedV1) Marshal() ([]byte, error) {
+	raw, err := json.Marshal(e)
+	if err != nil {
+		return nil, fmt.Errorf("marshal order.confirmed.v1: %w", err)
+	}
+	return raw, nil
+}
+
+// UnmarshalOrderConfirmed deserializes an order.confirmed.v1 body.
+func UnmarshalOrderConfirmed(raw []byte) (OrderConfirmedV1, error) {
+	var e OrderConfirmedV1
+	if err := json.Unmarshal(raw, &e); err != nil {
+		return OrderConfirmedV1{}, fmt.Errorf("unmarshal order.confirmed.v1: %w", err)
+	}
+	return e, nil
+}
+
+// OrderCancelledV1 is the integration event emitted when the saga compensates
+// and cancels an order. Reason records why.
+type OrderCancelledV1 struct {
+	OrderID     string `json:"orderId"`
+	Reason      string `json:"reason"`
+	CancelledAt string `json:"cancelledAt"`
+}
+
+// Marshal serializes the event body.
+func (e OrderCancelledV1) Marshal() ([]byte, error) {
+	raw, err := json.Marshal(e)
+	if err != nil {
+		return nil, fmt.Errorf("marshal order.cancelled.v1: %w", err)
+	}
+	return raw, nil
+}
+
+// UnmarshalOrderCancelled deserializes an order.cancelled.v1 body.
+func UnmarshalOrderCancelled(raw []byte) (OrderCancelledV1, error) {
+	var e OrderCancelledV1
+	if err := json.Unmarshal(raw, &e); err != nil {
+		return OrderCancelledV1{}, fmt.Errorf("unmarshal order.cancelled.v1: %w", err)
 	}
 	return e, nil
 }

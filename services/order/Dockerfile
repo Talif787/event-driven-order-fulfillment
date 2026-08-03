@@ -10,6 +10,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/api ./c
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/relay ./cmd/relay
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/projector ./cmd/projector
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/orchestrator ./cmd/orchestrator
 
 FROM gcr.io/distroless/static-debian12:nonroot AS api
 WORKDIR /app
@@ -35,3 +36,9 @@ WORKDIR /app
 COPY --from=build /out/projector /app/projector
 USER nonroot:nonroot
 ENTRYPOINT ["/app/projector"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS orchestrator
+WORKDIR /app
+COPY --from=build /out/orchestrator /app/orchestrator
+USER nonroot:nonroot
+ENTRYPOINT ["/app/orchestrator"]
