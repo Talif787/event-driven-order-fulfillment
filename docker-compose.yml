@@ -144,7 +144,10 @@ services:
       SAGA_GROUP_ID: order-saga
       SAGA_TOPICS: orders.events
       INVENTORY_BASE_URL: http://inventory-api:8080
-      PAYMENT_STUB_OUTCOME: decline
+      # With PAYMENT_BASE_URL set the saga calls the real Payment service and
+      # ignores PAYMENT_STUB_OUTCOME (kept only as a fallback if the URL is empty).
+      PAYMENT_BASE_URL: http://payment-api:8080
+      PAYMENT_STUB_OUTCOME: approve
       OTEL_EXPORTER_OTLP_ENDPOINT: ""
     depends_on:
       postgres:
@@ -156,6 +159,8 @@ services:
       kafka-init:
         condition: service_completed_successfully
       inventory-api:
+        condition: service_started
+      payment-api:
         condition: service_started
     restart: on-failure
   # ---------------------------------------------------------------------------
@@ -208,6 +213,50 @@ services:
         condition: service_completed_successfully
     restart: on-failure
 
+  # ---------------------------------------------------------------------------
+  # Payment service (Phase 4). Java/Spring Boot, own Postgres, runs on :8082.
+  # Spring runs Flyway on startup, so there is no separate migrate service.
+  # ---------------------------------------------------------------------------
+  payment-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: payment
+      POSTGRES_PASSWORD: payment
+      POSTGRES_DB: payment
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment -d payment"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - payment-pgdata:/var/lib/postgresql/data
+
+  payment-api:
+    build:
+      context: ./services/payment
+      target: api
+    environment:
+      DATABASE_URL: jdbc:postgresql://payment-postgres:5432/payment
+      DATABASE_USER: payment
+      DATABASE_PASSWORD: payment
+      KAFKA_BROKERS: kafka:9092
+      SERVER_PORT: "8080"
+      PAYMENT_GATEWAY_OUTCOME: ${PAYMENT_GATEWAY_OUTCOME:-approve}
+      PAYMENT_WEBHOOK_SECRET: whsec_local_dev_secret
+    ports:
+      - "8082:8080"
+    depends_on:
+      payment-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    restart: on-failure
+
 volumes:
   pgdata:
   inventory-pgdata:
+  payment-pgdata:
