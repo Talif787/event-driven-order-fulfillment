@@ -42,6 +42,20 @@ func (r *ProjectionRepository) UpsertOrderPlaced(ctx context.Context, p app.Orde
 	return nil
 }
 
+// UpdateStatus advances the read-model status for lifecycle events that follow
+// placement (confirmed, cancelled). The order.placed event for an aggregate
+// always precedes these on the same partition, so the row exists by the time
+// this runs; if it does not (projection lag), the update is a harmless no-op.
+func (r *ProjectionRepository) UpdateStatus(ctx context.Context, orderID, status string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE order_projections SET status = $2, updated_at = now() WHERE order_id = $1`,
+		orderID, status)
+	if err != nil {
+		return fmt.Errorf("update projection status: %w", err)
+	}
+	return nil
+}
+
 // GetOrder returns the read model for an order, or order.ErrNotFound when the
 // projection has not yet been built.
 func (r *ProjectionRepository) GetOrder(ctx context.Context, orderID string) (app.OrderProjection, error) {

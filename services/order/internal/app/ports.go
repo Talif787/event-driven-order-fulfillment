@@ -72,6 +72,7 @@ type OrderProjection struct {
 // ProjectionStore writes the order read model.
 type ProjectionStore interface {
 	UpsertOrderPlaced(ctx context.Context, p OrderProjection) error
+	UpdateStatus(ctx context.Context, orderID, status string) error
 }
 
 // ProjectionReader reads the order read model. It returns order.ErrNotFound
