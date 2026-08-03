@@ -22,6 +22,15 @@ type Config struct {
 	Kafka       KafkaConfig
 	Relay       RelayConfig
 	Projector   ProjectorConfig
+	Saga        SagaConfig
+}
+
+type SagaConfig struct {
+	GroupID          string
+	Topics           []string
+	InventoryBaseURL string
+	PaymentOutcome   string
+	HTTPTimeout      time.Duration
 }
 
 type KafkaConfig struct {
@@ -104,6 +113,13 @@ func Load() (Config, error) {
 		Projector: ProjectorConfig{
 			GroupID: env("PROJECTOR_GROUP_ID", "order-projection"),
 			Topics:  envList("PROJECTOR_TOPICS", []string{"orders.events"}),
+		},
+		Saga: SagaConfig{
+			GroupID:          env("SAGA_GROUP_ID", "order-saga"),
+			Topics:           envList("SAGA_TOPICS", []string{"orders.events"}),
+			InventoryBaseURL: env("INVENTORY_BASE_URL", "http://localhost:8081"),
+			PaymentOutcome:   env("PAYMENT_STUB_OUTCOME", "approve"),
+			HTTPTimeout:      envDuration("SAGA_HTTP_TIMEOUT", 5*time.Second),
 		},
 	}
 	if err := cfg.validate(); err != nil {
