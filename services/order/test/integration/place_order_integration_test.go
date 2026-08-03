@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,12 +67,25 @@ func startPostgres(ctx context.Context, t *testing.T) string {
 
 func applyMigrations(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	data, err := fs.ReadFile(pg.MigrationsFS, "migrations/0001_init.up.sql")
+	entries, err := fs.ReadDir(pg.MigrationsFS, "migrations")
 	if err != nil {
-		t.Fatalf("read migration: %v", err)
+		t.Fatalf("read migrations dir: %v", err)
 	}
-	if _, err := pool.Exec(ctx, string(data)); err != nil {
-		t.Fatalf("apply migration: %v", err)
+	var ups []string
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".up.sql") {
+			ups = append(ups, e.Name())
+		}
+	}
+	sort.Strings(ups)
+	for _, name := range ups {
+		data, err := fs.ReadFile(pg.MigrationsFS, "migrations/"+name)
+		if err != nil {
+			t.Fatalf("read migration %s: %v", name, err)
+		}
+		if _, err := pool.Exec(ctx, string(data)); err != nil {
+			t.Fatalf("apply migration %s: %v", name, err)
+		}
 	}
 }
 
@@ -124,7 +139,7 @@ func TestPlaceOrder_PersistsEventAndOutbox(t *testing.T) {
 		t.Fatalf("expected 1 event and 1 outbox row, got events=%d outbox=%d", eventCount, outboxCount)
 	}
 
-	get := query.NewGetOrderHandler(pg.NewOrderRepository(pool), noop.NewTracerProvider().Tracer("integration"))
+	get := query.NewGetOrderHandler(pg.NewProjectionRepository(pool), pg.NewOrderRepository(pool), noop.NewTracerProvider().Tracer("integration"))
 	view, err := get.Handle(ctx, res.OrderID)
 	if err != nil {
 		t.Fatalf("get order: %v", err)
