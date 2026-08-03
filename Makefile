@@ -65,7 +65,7 @@ smoke:
 	@echo "End-to-end smoke test (stack must be up: make compose-up):"
 	@echo "1. Place an order:"
 	@echo "   curl -s -XPOST localhost:8080/v1/orders -H 'Content-Type: application/json' \\"
-	@echo "     -H 'Idempotency-Key: smoke-1' -d @docs/sample-order.json"
+	@echo "     -H 'Idempotency-Key: smoke-0001' -d @docs/sample-order.json"
 	@echo "2. Watch the event land on the topic:"
 	@echo "   docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \\"
 	@echo "     --bootstrap-server localhost:9092 --topic orders.events --from-beginning --max-messages 1"
