@@ -1,0 +1,25 @@
+serviceName: notification
+existingSecret: notification-secrets
+
+serviceAccount:
+  roleArn: ""
+
+migrate:
+  enabled: true
+  image: notification-migrate
+  args: ["up"]
+
+env:
+  SERVICE_NAME: notification-service
+  ENVIRONMENT: production
+  KAFKA_BROKERS: "REPLACE_WITH_MSK_BOOTSTRAP"
+  CONSUMER_GROUP_ID: notification
+  CONSUMER_TOPICS: orders.events,payments.events,fulfillment.events
+
+workloads:
+  - name: consumer
+    image: notification-consumer
+    replicas: 1
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits: { cpu: 250m, memory: 128Mi }
