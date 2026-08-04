@@ -120,4 +120,3 @@ func traceIDFromContext(ctx context.Context) string {
 	}
 	return ""
 }
-
