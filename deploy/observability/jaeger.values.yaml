@@ -1,0 +1,27 @@
+# Values for jaegertracing/jaeger.
+# All-in-one with in-memory storage for a dev cluster: one pod running the
+# collector (OTLP in) and the query UI. Not for production, where you would
+# provision Elasticsearch or Cassandra and split the components. The collector
+# accepts OTLP on 4317; the query UI serves on 16686.
+
+provisionDataStore:
+  cassandra: false
+  elasticsearch: false
+
+allInOne:
+  enabled: true
+  args:
+    - "--memory.max-traces=50000"
+  extraEnv:
+    - name: COLLECTOR_OTLP_ENABLED
+      value: "true"
+
+storage:
+  type: memory
+
+agent:
+  enabled: false
+collector:
+  enabled: false
+query:
+  enabled: false

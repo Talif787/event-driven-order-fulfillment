@@ -1,0 +1,53 @@
+# Values for open-telemetry/opentelemetry-collector.
+# A single collector deployment that receives OTLP from the services (the
+# OTEL_EXPORTER_OTLP_ENDPOINT they already point at) and forwards traces to
+# Jaeger over OTLP. The service name resolves to otel-collector.observability,
+# matching the endpoint in the app Helm values.
+
+mode: deployment
+fullnameOverride: otel-collector
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+  processors:
+    batch: {}
+  exporters:
+    otlp/jaeger:
+      endpoint: jaeger-collector.observability:4317
+      tls:
+        insecure: true
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [otlp/jaeger]
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
