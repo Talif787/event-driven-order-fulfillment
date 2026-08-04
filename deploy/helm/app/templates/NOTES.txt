@@ -1,0 +1,22 @@
+{{ .Values.serviceName }} release {{ .Release.Name }} deployed to namespace {{ .Release.Namespace }}.
+
+Workloads:
+{{- range .Values.workloads }}
+  - {{ $.Values.serviceName }}-{{ .name }}{{ if .port }} (http :{{ .port }}){{ end }}
+{{- end }}
+
+Check rollout:
+  kubectl -n {{ .Release.Namespace }} get deploy,po,svc -l app.kubernetes.io/name={{ .Values.serviceName }}
+
+{{- if .Values.migrate.enabled }}
+
+Migrations run as a pre-upgrade hook Job ({{ .Values.serviceName }}-migrate); view logs:
+  kubectl -n {{ .Release.Namespace }} logs job/{{ .Values.serviceName }}-migrate
+{{- end }}
+
+{{- if not .Values.existingSecret }}
+
+WARNING: existingSecret is empty. Create the credentials Secret before traffic:
+  kubectl -n {{ .Release.Namespace }} create secret generic {{ .Values.serviceName }}-secrets \
+    --from-literal=DATABASE_URL=postgres://...
+{{- end }}

@@ -1,0 +1,80 @@
+# Default values for the app chart. Every service overrides serviceName, env,
+# workloads, and the secret reference in its own values file under ../values.
+
+global:
+  # Container registry that holds the pushed images. Terraform creates the ECR
+  # repositories; CI pushes <registry>/<image>:<tag>.
+  registry: ghcr.io/talif787/order-fulfillment
+  imageTag: latest
+
+image:
+  pullPolicy: IfNotPresent
+
+# serviceName is the release identity and the prefix for every object.
+serviceName: app
+
+serviceAccount:
+  # IRSA role ARN, wired by Terraform. Empty means the default node role.
+  roleArn: ""
+
+# existingSecret names a Secret (created out of band by External Secrets or
+# Terraform) mounted as env on every workload. It holds DATABASE_URL and any
+# other credentials, which must never live in a ConfigMap.
+existingSecret: ""
+
+# env becomes a ConfigMap mounted as env on every workload. Non-secret only.
+env: {}
+
+# workloads is the list of processes for this service. Each becomes a
+# Deployment, and a Service plus probes when it declares a port.
+workloads: []
+# - name: api
+#   image: order-api
+#   replicas: 2
+#   port: 8080
+#   livenessPath: /livez
+#   readinessPath: /readyz
+#   autoscaling:
+#     enabled: true
+#     minReplicas: 2
+#     maxReplicas: 6
+#     targetCPUUtilizationPercentage: 70
+#   resources:
+#     requests: { cpu: 50m, memory: 64Mi }
+#     limits: { cpu: 500m, memory: 256Mi }
+
+# migrate runs schema migrations as a pre-install and pre-upgrade Helm hook.
+migrate:
+  enabled: false
+  image: ""
+  args: ["up"]
+
+# ingress exposes one workload externally. Off by default; the order api turns
+# it on. Requires an ingress controller (the AWS Load Balancer Controller in
+# this stack, installed in the Terraform phase).
+ingress:
+  enabled: false
+  className: alb
+  annotations: {}
+  host: ""
+  serviceName: ""
+  servicePort: 8080
+
+# metrics gates the Prometheus ServiceMonitor. Off until the services expose a
+# /metrics endpoint (the observability phase).
+metrics:
+  enabled: false
+  path: /metrics
+  interval: 30s
+
+defaultResources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+podAnnotations: {}
+
+terminationGracePeriodSeconds: 30

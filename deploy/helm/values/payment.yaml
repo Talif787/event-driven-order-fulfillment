@@ -1,0 +1,36 @@
+serviceName: payment
+existingSecret: payment-secrets
+
+serviceAccount:
+  roleArn: ""
+
+# Payment runs Flyway on boot, so no separate migrate hook.
+migrate:
+  enabled: false
+
+env:
+  ENVIRONMENT: production
+  SERVER_PORT: "8080"
+  KAFKA_BROKERS: "REPLACE_WITH_MSK_BOOTSTRAP"
+  PAYMENT_GATEWAY_OUTCOME: approve
+  # DATABASE_URL (jdbc), DATABASE_USER, DATABASE_PASSWORD, and
+  # PAYMENT_WEBHOOK_SECRET live in the payment-secrets Secret.
+
+workloads:
+  - name: api
+    image: payment-api
+    port: 8080
+    replicas: 2
+    livenessPath: /actuator/health
+    readinessPath: /actuator/health
+    livenessInitialDelaySeconds: 40
+    readinessInitialDelaySeconds: 25
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 75
+    # JVM: larger memory footprint than the Go services.
+    resources:
+      requests: { cpu: 250m, memory: 512Mi }
+      limits: { cpu: 1000m, memory: 768Mi }

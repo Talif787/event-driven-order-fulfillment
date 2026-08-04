@@ -1,0 +1,42 @@
+{{- if .Values.migrate.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.serviceName }}-migrate
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        {{- include "app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ .Values.serviceName }}
+      securityContext:
+        {{- include "app.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: migrate
+          image: "{{ .Values.global.registry }}/{{ .Values.migrate.image }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- toYaml .Values.migrate.args | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.serviceName }}-config
+            {{- if .Values.existingSecret }}
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+            {{- end }}
+          securityContext:
+            {{- include "app.containerSecurityContext" . | nindent 12 }}
+{{- end }}

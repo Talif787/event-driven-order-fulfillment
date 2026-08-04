@@ -1,0 +1,28 @@
+{{- $top := . -}}
+{{- range .Values.workloads }}
+{{- if dig "autoscaling" "enabled" false . }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $top.Values.serviceName }}-{{ .name }}
+  namespace: {{ $top.Release.Namespace }}
+  labels:
+    {{- include "app.labels" $top | nindent 4 }}
+    app.kubernetes.io/component: {{ .name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $top.Values.serviceName }}-{{ .name }}
+  minReplicas: {{ .autoscaling.minReplicas | default 2 }}
+  maxReplicas: {{ .autoscaling.maxReplicas | default 6 }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .autoscaling.targetCPUUtilizationPercentage | default 70 }}
+{{- end }}
+{{- end }}
