@@ -38,10 +38,10 @@ func RehydrateReservation(id ReservationID, orderID OrderID, status ReservationS
 	return &Reservation{id: id, orderID: orderID, status: status, lines: lines}
 }
 
-func (r *Reservation) ID() ReservationID       { return r.id }
-func (r *Reservation) OrderID() OrderID         { return r.orderID }
+func (r *Reservation) ID() ReservationID         { return r.id }
+func (r *Reservation) OrderID() OrderID          { return r.orderID }
 func (r *Reservation) Status() ReservationStatus { return r.status }
-func (r *Reservation) Lines() []ReservationLine { return r.lines }
+func (r *Reservation) Lines() []ReservationLine  { return r.lines }
 
 // Release transitions HELD to RELEASED. It returns changed=false when the
 // reservation is already RELEASED, which makes release idempotent, and an error
