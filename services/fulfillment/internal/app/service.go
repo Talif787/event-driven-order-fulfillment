@@ -10,6 +10,7 @@ import (
 
 	"github.com/orderfulfillment/fulfillment/internal/contracts"
 	"github.com/orderfulfillment/fulfillment/internal/domain/fulfillment"
+	"github.com/orderfulfillment/fulfillment/internal/infra/metrics"
 )
 
 // Service is the fulfillment use-case layer. It creates a shipment when an order
@@ -59,6 +60,7 @@ func (s *Service) CreateForOrder(ctx context.Context, orderID uuid.UUID) (*fulfi
 		} else {
 			s.logger.InfoContext(ctx, "shipment created",
 				slog.String("order_id", orderID.String()), slog.String("shipment_id", shipment.ID().String()))
+			metrics.Shipments.WithLabelValues("created").Inc()
 		}
 	default:
 		return nil, fmt.Errorf("load shipment: %w", err)
@@ -92,6 +94,7 @@ func (s *Service) Dispatch(ctx context.Context, orderID uuid.UUID, carrier, trac
 		if err := s.repo.Update(ctx, shipment); err != nil {
 			return nil, err
 		}
+		metrics.Shipments.WithLabelValues("dispatched").Inc()
 		evt := contracts.ShipmentDispatchedV1{
 			ShipmentID:   shipment.ID().String(),
 			OrderID:      shipment.OrderID().String(),
@@ -120,6 +123,7 @@ func (s *Service) Deliver(ctx context.Context, orderID uuid.UUID) (*fulfillment.
 		if err := s.repo.Update(ctx, shipment); err != nil {
 			return nil, err
 		}
+		metrics.Shipments.WithLabelValues("delivered").Inc()
 		evt := contracts.ShipmentDeliveredV1{
 			ShipmentID:  shipment.ID().String(),
 			OrderID:     shipment.OrderID().String(),

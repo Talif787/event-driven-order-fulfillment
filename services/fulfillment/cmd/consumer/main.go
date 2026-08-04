@@ -6,11 +6,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/orderfulfillment/fulfillment/internal/app"
 	"github.com/orderfulfillment/fulfillment/internal/infra/config"
 	infrakafka "github.com/orderfulfillment/fulfillment/internal/infra/kafka"
 	"github.com/orderfulfillment/fulfillment/internal/infra/logging"
+	"github.com/orderfulfillment/fulfillment/internal/infra/metrics"
 	"github.com/orderfulfillment/fulfillment/internal/infra/postgres"
 	"github.com/orderfulfillment/fulfillment/internal/infra/telemetry"
 	"github.com/orderfulfillment/fulfillment/internal/worker/consumer"
@@ -35,6 +37,13 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	metricsSrv := metrics.StartServer(cfg.MetricsAddr, logger)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = metricsSrv.Shutdown(shutdownCtx)
+	}()
 
 	tel, err := telemetry.Setup(ctx, name, cfg.Environment, cfg.Telemetry.OTLPEndpoint, cfg.Telemetry.SampleRatio)
 	if err != nil {

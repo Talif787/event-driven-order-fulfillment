@@ -14,6 +14,7 @@ type Config struct {
 	ServiceName string
 	Environment string
 	HTTPAddr    string
+	MetricsAddr string
 	Database    DatabaseConfig
 	Kafka       KafkaConfig
 	Consumer    ConsumerConfig
@@ -65,6 +66,7 @@ func Load() (Config, error) {
 		ServiceName: env("SERVICE_NAME", "fulfillment-service"),
 		Environment: env("ENVIRONMENT", "development"),
 		HTTPAddr:    env("HTTP_ADDR", ":8083"),
+		MetricsAddr: env("METRICS_ADDR", ":9090"),
 		Database: DatabaseConfig{
 			URL:             env("DATABASE_URL", "postgres://fulfillment:fulfillment@localhost:5435/fulfillment?sslmode=disable"),
 			MaxConns:        int32(envInt("DB_MAX_CONNS", 20)),
