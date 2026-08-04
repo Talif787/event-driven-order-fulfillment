@@ -18,7 +18,11 @@ env:
   CONSUMER_GROUP_ID: fulfillment
   CONSUMER_TOPICS: orders.events
   FULFILLMENT_EVENTS_TOPIC: fulfillment.events
+  METRICS_ADDR: ":9090"
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability:4318
+
+metrics:
+  enabled: true
 
 workloads:
   - name: api
@@ -35,6 +39,7 @@ workloads:
       limits: { cpu: 500m, memory: 256Mi }
   - name: consumer
     image: fulfillment-consumer
+    port: 9090
     replicas: 1
     resources:
       requests: { cpu: 50m, memory: 64Mi }
