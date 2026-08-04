@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/orderfulfillment/inventory/internal/infra/config"
 	"github.com/orderfulfillment/inventory/internal/infra/logging"
+	"github.com/orderfulfillment/inventory/internal/infra/metrics"
 )
 
 type principalKey struct{}
@@ -80,6 +82,23 @@ func loggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 			)
 		})
 	}
+}
+
+// metricsMiddleware records request count and latency, labelled by the matched
+// route pattern (not the raw path) to keep cardinality bounded. It runs
+// innermost so the pattern is set by the mux by the time it reads it.
+func metricsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rec, r)
+		path := r.Pattern
+		if path == "" {
+			path = "unmatched"
+		}
+		metrics.HTTPRequests.WithLabelValues(metrics.Service, r.Method, path, strconv.Itoa(rec.status)).Inc()
+		metrics.HTTPDuration.WithLabelValues(metrics.Service, r.Method, path).Observe(time.Since(start).Seconds())
+	})
 }
 
 // authMiddleware verifies a bearer JWT (HS256) when auth is enabled and injects

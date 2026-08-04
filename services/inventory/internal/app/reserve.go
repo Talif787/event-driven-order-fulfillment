@@ -2,12 +2,15 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/orderfulfillment/inventory/internal/domain/inventory"
+	"github.com/orderfulfillment/inventory/internal/infra/metrics"
 )
 
 // ReserveLineInput is one requested line on the reserve command.
@@ -66,8 +69,12 @@ func (h *ReserveStockHandler) Handle(ctx context.Context, cmd ReserveStockComman
 
 	res, err := h.store.Reserve(ctx, oid.String(), lines)
 	if err != nil {
+		if errors.Is(err, inventory.ErrInsufficientStock) {
+			metrics.Reservations.WithLabelValues("rejected").Inc()
+		}
 		return ReservationResult{}, err
 	}
+	metrics.Reservations.WithLabelValues(strings.ToLower(res.Status)).Inc()
 	h.logger.InfoContext(ctx, "stock reserved",
 		slog.String("order_id", oid.String()),
 		slog.String("status", res.Status),
