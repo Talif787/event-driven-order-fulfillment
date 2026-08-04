@@ -1,0 +1,46 @@
+name: Deploy
+
+# Manual, gated deploy. Runs helm upgrade for every service against the cluster
+# named in the KUBECONFIG secret. Guarded by a GitHub Environment so it can
+# require a reviewer, and it stays inert until you add the secret and a cluster.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment.
+        type: choice
+        options: [dev]
+        default: dev
+      image_tag:
+        description: Image tag to deploy (commit SHA or latest).
+        type: string
+        default: latest
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write kubeconfig
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > "$HOME/.kube/config"
+      - uses: azure/setup-helm@v4
+      - uses: azure/setup-kubectl@v4
+      - name: Helm upgrade all services
+        run: |
+          registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/order-fulfillment"
+          kubectl apply -f deploy/k8s/namespace.yaml
+          for s in order inventory payment fulfillment notification; do
+            echo "== deploying $s =="
+            helm upgrade --install "$s" deploy/helm/app \
+              -f "deploy/helm/values/$s.yaml" \
+              -n order-fulfillment \
+              --set global.registry="$registry" \
+              --set global.imageTag="${{ inputs.image_tag }}" \
+              --wait --timeout 5m
+          done
