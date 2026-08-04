@@ -1,0 +1,20 @@
+{{- $top := . -}}
+{{- range .Values.workloads }}
+{{- if gt (int (.replicas | default 1)) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $top.Values.serviceName }}-{{ .name }}
+  namespace: {{ $top.Release.Namespace }}
+  labels:
+    {{- include "app.labels" $top | nindent 4 }}
+    app.kubernetes.io/component: {{ .name }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" $top | nindent 6 }}
+      app.kubernetes.io/component: {{ .name }}
+{{- end }}
+{{- end }}

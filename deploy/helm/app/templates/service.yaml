@@ -1,0 +1,24 @@
+{{- $top := . -}}
+{{- range .Values.workloads }}
+{{- if .port }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $top.Values.serviceName }}-{{ .name }}
+  namespace: {{ $top.Release.Namespace }}
+  labels:
+    {{- include "app.labels" $top | nindent 4 }}
+    app.kubernetes.io/component: {{ .name }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "app.selectorLabels" $top | nindent 4 }}
+    app.kubernetes.io/component: {{ .name }}
+  ports:
+    - name: http
+      port: {{ .port }}
+      targetPort: http
+      protocol: TCP
+{{- end }}
+{{- end }}

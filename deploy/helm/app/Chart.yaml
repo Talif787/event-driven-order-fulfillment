@@ -1,0 +1,11 @@
+apiVersion: v2
+name: app
+description: Reusable application chart for the order-fulfillment services. One
+  release per bounded context, parameterized by a list of workloads so a service
+  with several processes (api, relay, projector, orchestrator, consumer) deploys
+  from a single values file.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+maintainers:
+  - name: Talif

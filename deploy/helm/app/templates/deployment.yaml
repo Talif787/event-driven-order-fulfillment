@@ -1,0 +1,90 @@
+{{- $top := . -}}
+{{- range .Values.workloads }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $top.Values.serviceName }}-{{ .name }}
+  namespace: {{ $top.Release.Namespace }}
+  labels:
+    {{- include "app.labels" $top | nindent 4 }}
+    app.kubernetes.io/component: {{ .name }}
+spec:
+  {{- if not (dig "autoscaling" "enabled" false .) }}
+  replicas: {{ .replicas | default 1 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" $top | nindent 6 }}
+      app.kubernetes.io/component: {{ .name }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        {{- include "app.selectorLabels" $top | nindent 8 }}
+        app.kubernetes.io/component: {{ .name }}
+      {{- with $top.Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ $top.Values.serviceName }}
+      terminationGracePeriodSeconds: {{ $top.Values.terminationGracePeriodSeconds }}
+      securityContext:
+        {{- include "app.podSecurityContext" $top | nindent 8 }}
+      containers:
+        - name: {{ .name }}
+          image: "{{ $top.Values.global.registry }}/{{ .image }}:{{ $top.Values.global.imageTag }}"
+          imagePullPolicy: {{ $top.Values.image.pullPolicy }}
+          {{- with .args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .port }}
+          ports:
+            - name: http
+              containerPort: {{ .port }}
+              protocol: TCP
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ $top.Values.serviceName }}-config
+            {{- if $top.Values.existingSecret }}
+            - secretRef:
+                name: {{ $top.Values.existingSecret }}
+            {{- end }}
+          {{- if .port }}
+          livenessProbe:
+            httpGet:
+              path: {{ .livenessPath | default "/livez" }}
+              port: http
+            initialDelaySeconds: {{ .livenessInitialDelaySeconds | default 10 }}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: {{ .readinessPath | default "/readyz" }}
+              port: http
+            initialDelaySeconds: {{ .readinessInitialDelaySeconds | default 5 }}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          {{- end }}
+          resources:
+            {{- toYaml (.resources | default $top.Values.defaultResources) | nindent 12 }}
+          securityContext:
+            {{- include "app.containerSecurityContext" $top | nindent 12 }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "app.selectorLabels" $top | nindent 14 }}
+              app.kubernetes.io/component: {{ .name }}
+{{- end }}
