@@ -5,10 +5,12 @@ import (
 	"net/http"
 
 	"github.com/orderfulfillment/order/internal/infra/config"
+	"github.com/orderfulfillment/order/internal/infra/metrics"
 )
 
 // NewRouter wires routes and the middleware chain. Business routes require
-// authentication (when enabled); health probes are always public.
+// authentication (when enabled); health probes are always public. The /metrics
+// scrape endpoint is served off the chain so it is neither logged nor counted.
 func NewRouter(h *Handlers, health *HealthHandlers, cfg config.AuthConfig, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 
@@ -20,9 +22,15 @@ func NewRouter(h *Handlers, health *HealthHandlers, cfg config.AuthConfig, logge
 	mux.HandleFunc("GET /readyz", health.Ready)
 	mux.HandleFunc("GET /healthz", health.Live)
 
-	return chain(mux,
+	business := chain(mux,
 		correlationMiddleware,
 		recoveryMiddleware(logger),
 		loggingMiddleware(logger),
+		metricsMiddleware,
 	)
+
+	root := http.NewServeMux()
+	root.Handle("GET /metrics", metrics.Handler())
+	root.Handle("/", business)
+	return root
 }

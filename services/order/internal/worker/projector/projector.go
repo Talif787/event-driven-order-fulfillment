@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 
 	"github.com/orderfulfillment/order/internal/app/projection"
 	"github.com/orderfulfillment/order/internal/contracts"
+	"github.com/orderfulfillment/order/internal/infra/metrics"
 )
 
 // Worker consumes the order event stream and applies events to the read model.
@@ -43,7 +45,13 @@ func (w *Worker) Run(ctx context.Context) error {
 			if ctx.Err() != nil || errors.Is(err, context.Canceled) {
 				return nil
 			}
-			return fmt.Errorf("fetch message: %w", err)
+			w.logger.Warn("fetch failed, retrying", slog.String("error", err.Error()))
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(time.Second):
+			}
+			continue
 		}
 
 		eventType := headerValue(msg.Headers, contracts.HeaderEventType)
@@ -57,6 +65,8 @@ func (w *Worker) Run(ctx context.Context) error {
 			}
 			return fmt.Errorf("commit offset: %w", err)
 		}
+
+		metrics.EventsConsumed.WithLabelValues(metrics.Service, msg.Topic).Inc()
 	}
 }
 
