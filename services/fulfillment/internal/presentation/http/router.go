@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/orderfulfillment/fulfillment/internal/infra/config"
+	"github.com/orderfulfillment/fulfillment/internal/infra/metrics"
 )
 
 // NewRouter wires routes and the middleware chain. Business routes require
@@ -21,9 +22,15 @@ func NewRouter(h *Handlers, health *HealthHandlers, cfg config.AuthConfig, logge
 	mux.HandleFunc("GET /readyz", health.Ready)
 	mux.HandleFunc("GET /healthz", health.Live)
 
-	return chain(mux,
+	business := chain(mux,
 		correlationMiddleware,
 		recoveryMiddleware(logger),
 		loggingMiddleware(logger),
+		metricsMiddleware,
 	)
+
+	root := http.NewServeMux()
+	root.Handle("GET /metrics", metrics.Handler())
+	root.Handle("/", business)
+	return root
 }
