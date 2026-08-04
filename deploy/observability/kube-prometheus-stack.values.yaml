@@ -1,0 +1,49 @@
+# Values for prometheus-community/kube-prometheus-stack.
+# Bundles Prometheus, Grafana, Alertmanager, node-exporter, and
+# kube-state-metrics. Tuned for a dev cluster: ephemeral storage, Alertmanager
+# off, and Prometheus set to discover every ServiceMonitor in the cluster
+# (including the ones the app chart renders once metrics are enabled).
+
+fullnameOverride: kps
+
+alertmanager:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    # Discover ServiceMonitors and PodMonitors from all namespaces, not just
+    # those carrying this release's Helm label. This is what lets Prometheus
+    # scrape the app services in the order-fulfillment namespace.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    retention: 7d
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+
+grafana:
+  adminPassword: admin
+  defaultDashboardsEnabled: true
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+    datasources:
+      enabled: true
+  # Jaeger as a second datasource, so traces are viewable in Grafana alongside
+  # the Prometheus metrics. The bundled Prometheus datasource is created by the
+  # chart with uid "prometheus".
+  additionalDataSources:
+    - name: Jaeger
+      type: jaeger
+      access: proxy
+      uid: jaeger
+      url: http://jaeger-query.observability:16686
+  service:
+    type: ClusterIP
