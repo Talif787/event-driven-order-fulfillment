@@ -54,6 +54,9 @@ services:
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \
           --create --if-not-exists --topic orders.events \
           --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \
+          --create --if-not-exists --topic fulfillment.events \
+          --partitions 3 --replication-factor 1
     restart: "no"
 
   migrate:
@@ -256,7 +259,90 @@ services:
         condition: service_completed_successfully
     restart: on-failure
 
+  # ---------------------------------------------------------------------------
+  # Fulfillment service (Phase 5). Go, own Postgres on :5435, HTTP API on :8083.
+  # The consumer reacts to order.confirmed and opens a shipment; the API advances
+  # it (dispatch, deliver) and both emit to fulfillment.events.
+  # ---------------------------------------------------------------------------
+  fulfillment-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fulfillment
+      POSTGRES_PASSWORD: fulfillment
+      POSTGRES_DB: fulfillment
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fulfillment -d fulfillment"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - fulfillment-pgdata:/var/lib/postgresql/data
+
+  fulfillment-migrate:
+    build:
+      context: ./services/fulfillment
+      target: migrate
+    environment:
+      DATABASE_URL: postgres://fulfillment:fulfillment@fulfillment-postgres:5432/fulfillment?sslmode=disable
+    command: ["up"]
+    depends_on:
+      fulfillment-postgres:
+        condition: service_healthy
+    restart: "no"
+
+  fulfillment-api:
+    build:
+      context: ./services/fulfillment
+      target: api
+    environment:
+      SERVICE_NAME: fulfillment-service
+      ENVIRONMENT: development
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://fulfillment:fulfillment@fulfillment-postgres:5432/fulfillment?sslmode=disable
+      KAFKA_BROKERS: kafka:9092
+      FULFILLMENT_EVENTS_TOPIC: fulfillment.events
+      AUTH_ENABLED: "false"
+    ports:
+      - "8083:8080"
+    depends_on:
+      fulfillment-postgres:
+        condition: service_healthy
+      fulfillment-migrate:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    restart: on-failure
+
+  fulfillment-consumer:
+    build:
+      context: ./services/fulfillment
+      target: consumer
+    environment:
+      SERVICE_NAME: fulfillment-service
+      ENVIRONMENT: development
+      DATABASE_URL: postgres://fulfillment:fulfillment@fulfillment-postgres:5432/fulfillment?sslmode=disable
+      KAFKA_BROKERS: kafka:9092
+      CONSUMER_GROUP_ID: fulfillment
+      CONSUMER_TOPICS: orders.events
+      FULFILLMENT_EVENTS_TOPIC: fulfillment.events
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
+    depends_on:
+      fulfillment-postgres:
+        condition: service_healthy
+      fulfillment-migrate:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    restart: on-failure
+
 volumes:
   pgdata:
   inventory-pgdata:
   payment-pgdata:
+  fulfillment-pgdata:

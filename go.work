@@ -1,4 +1,8 @@
 go 1.23
 
 use ./services/order
-use ./services/inventory
+
+use (
+	./services/fulfillment
+	./services/inventory
+)
