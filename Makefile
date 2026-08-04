@@ -32,6 +32,11 @@ help:
 	@echo "  ful-run-api      Run the Fulfillment api locally"
 	@echo "  ful-run-consumer Run the Fulfillment consumer locally"
 	@echo "  ful-smoke        Print the shipment lifecycle demo"
+	@echo "  ntf-tidy         Resolve Notification module dependencies (requires network)"
+	@echo "  ntf-build        Build the Notification consumer and migrate binaries"
+	@echo "  ntf-test         Run the Notification service tests"
+	@echo "  ntf-run-consumer Run the Notification consumer locally"
+	@echo "  ntf-smoke        Print the notification fan-in demo"
 
 tidy:
 	cd $(SERVICE_DIR) && go mod tidy
@@ -252,3 +257,45 @@ ful-smoke:
 	@echo "Re-dispatch or re-deliver is an idempotent no-op; illegal jumps (deliver before"
 	@echo "dispatch) return 409 INVALID_STATE. Tail events with the console consumer:"
 	@echo "   docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic fulfillment.events --from-beginning"
+
+# ============================================================================
+# Notification service (Phase 5). Go module; pure consumer, own db on 5436, no
+# HTTP surface. Fans in orders.events, payments.events, and fulfillment.events
+# and records one deduped notification per event (simulated send is a log line).
+# ============================================================================
+NOTIFICATION_DIR := services/notification
+NOTIFICATION_DATABASE_URL ?= postgres://notification:notification@localhost:5436/notification?sslmode=disable
+
+.PHONY: ntf-tidy ntf-build ntf-test ntf-run-consumer ntf-smoke
+
+ntf-tidy:
+	cd $(NOTIFICATION_DIR) && go mod tidy
+
+ntf-build:
+	cd $(NOTIFICATION_DIR) && \
+		go build -o ../../bin/notification-consumer ./cmd/consumer && \
+		go build -o ../../bin/notification-migrate ./cmd/migrate
+
+ntf-test:
+	cd $(NOTIFICATION_DIR) && go test ./...
+
+ntf-run-consumer:
+	cd $(NOTIFICATION_DIR) && DATABASE_URL="$(NOTIFICATION_DATABASE_URL)" KAFKA_BROKERS="$(KAFKA_BROKERS)" go run ./cmd/consumer
+
+ntf-smoke:
+	@echo "Notification smoke test (stack up: make compose-up). No HTTP surface;"
+	@echo "you observe it through its logs and its notifications table."
+	@echo ""
+	@echo "1. Drive activity: place an order and let the saga confirm it, then advance"
+	@echo "   its shipment (see saga-smoke and ful-smoke). Notifications flow as events land."
+	@echo "2. Watch the consumer log a simulated send per event:"
+	@echo "   docker compose logs -f notification-consumer"
+	@echo "   (look for \"notification sent\" lines across order, payment, and shipment events)"
+	@echo "3. Inspect the recorded, deduped notifications:"
+	@echo "   docker compose exec notification-postgres \\"
+	@echo "     psql -U notification -d notification \\"
+	@echo "     -c \"SELECT event_type, order_id, subject FROM notifications ORDER BY created_at;\""
+	@echo ""
+	@echo "Dedup is on (event_type, order_id): replaying an event or restarting the"
+	@echo "consumer records no duplicate rows and sends nothing twice. Unknown event"
+	@echo "types are ignored, so adding a producer needs no change here until you map it."

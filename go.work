@@ -5,4 +5,5 @@ use ./services/order
 use (
 	./services/fulfillment
 	./services/inventory
+	./services/notification
 )
