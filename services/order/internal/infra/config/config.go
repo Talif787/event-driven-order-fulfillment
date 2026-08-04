@@ -15,6 +15,7 @@ type Config struct {
 	ServiceName string
 	Environment string
 	HTTPAddr    string
+	MetricsAddr string
 	Database    DatabaseConfig
 	Telemetry   TelemetryConfig
 	Auth        AuthConfig
@@ -81,6 +82,7 @@ func Load() (Config, error) {
 		ServiceName: env("SERVICE_NAME", "order-service"),
 		Environment: env("ENVIRONMENT", "development"),
 		HTTPAddr:    env("HTTP_ADDR", ":8080"),
+		MetricsAddr: env("METRICS_ADDR", ":9090"),
 		Database: DatabaseConfig{
 			URL:             env("DATABASE_URL", "postgres://order:order@localhost:5432/order?sslmode=disable"),
 			MaxConns:        int32(envInt("DB_MAX_CONNS", 20)),
