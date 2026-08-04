@@ -21,7 +21,7 @@ type Provider struct {
 	shutdown func(context.Context) error
 }
 
-func (p *Provider) Tracer() trace.Tracer            { return p.tracer }
+func (p *Provider) Tracer() trace.Tracer               { return p.tracer }
 func (p *Provider) Shutdown(ctx context.Context) error { return p.shutdown(ctx) }
 
 // Setup configures OpenTelemetry tracing. When endpoint is empty tracing is a
