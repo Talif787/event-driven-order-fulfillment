@@ -16,6 +16,9 @@ env:
   AUTH_ENABLED: "false"
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability:4318
 
+metrics:
+  enabled: true
+
 workloads:
   - name: api
     image: inventory-api

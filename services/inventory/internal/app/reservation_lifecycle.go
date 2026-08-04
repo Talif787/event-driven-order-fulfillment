@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/orderfulfillment/inventory/internal/domain/inventory"
+	"github.com/orderfulfillment/inventory/internal/infra/metrics"
 )
 
 // ReleaseReservationHandler releases a held reservation (saga compensation).
@@ -32,6 +33,7 @@ func (h *ReleaseReservationHandler) Handle(ctx context.Context, orderID string) 
 	if err != nil {
 		return ReservationResult{}, err
 	}
+	metrics.Reservations.WithLabelValues("released").Inc()
 	h.logger.InfoContext(ctx, "reservation released",
 		slog.String("order_id", oid.String()),
 		slog.Bool("idempotent", res.Idempotent),
@@ -62,6 +64,7 @@ func (h *CommitReservationHandler) Handle(ctx context.Context, orderID string) (
 	if err != nil {
 		return ReservationResult{}, err
 	}
+	metrics.Reservations.WithLabelValues("committed").Inc()
 	h.logger.InfoContext(ctx, "reservation committed",
 		slog.String("order_id", oid.String()),
 		slog.Bool("idempotent", res.Idempotent),
