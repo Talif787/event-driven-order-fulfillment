@@ -1,0 +1,96 @@
+name: Release
+
+# On merge to main, build and push images for the services that changed. Each
+# service calls the reusable docker-build workflow with its Dockerfile targets.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      order: ${{ steps.filter.outputs.order }}
+      inventory: ${{ steps.filter.outputs.inventory }}
+      payment: ${{ steps.filter.outputs.payment }}
+      fulfillment: ${{ steps.filter.outputs.fulfillment }}
+      notification: ${{ steps.filter.outputs.notification }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            order:
+              - 'services/order/**'
+            inventory:
+              - 'services/inventory/**'
+            payment:
+              - 'services/payment/**'
+            fulfillment:
+              - 'services/fulfillment/**'
+            notification:
+              - 'services/notification/**'
+
+  order:
+    needs: changes
+    if: ${{ needs.changes.outputs.order == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker-build.yml
+    with:
+      service: order
+      targets: '["api","migrate","relay","projector","orchestrator"]'
+
+  inventory:
+    needs: changes
+    if: ${{ needs.changes.outputs.inventory == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker-build.yml
+    with:
+      service: inventory
+      targets: '["api","migrate"]'
+
+  payment:
+    needs: changes
+    if: ${{ needs.changes.outputs.payment == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker-build.yml
+    with:
+      service: payment
+      targets: '["api"]'
+
+  fulfillment:
+    needs: changes
+    if: ${{ needs.changes.outputs.fulfillment == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker-build.yml
+    with:
+      service: fulfillment
+      targets: '["api","migrate","consumer"]'
+
+  notification:
+    needs: changes
+    if: ${{ needs.changes.outputs.notification == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker-build.yml
+    with:
+      service: notification
+      targets: '["consumer","migrate"]'

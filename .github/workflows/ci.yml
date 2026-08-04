@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      go_matrix: ${{ steps.set.outputs.go_matrix }}
+      payment: ${{ steps.filter.outputs.payment }}
+      terraform: ${{ steps.filter.outputs.terraform }}
+      deploy: ${{ steps.filter.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            order:
+              - 'services/order/**'
+            inventory:
+              - 'services/inventory/**'
+            payment:
+              - 'services/payment/**'
+            fulfillment:
+              - 'services/fulfillment/**'
+            notification:
+              - 'services/notification/**'
+            terraform:
+              - 'infra/terraform/**'
+            deploy:
+              - 'deploy/**'
+      - id: set
+        name: Build Go service matrix from changed paths
+        run: |
+          services=()
+          [ "${{ steps.filter.outputs.order }}" = "true" ]        && services+=("order")
+          [ "${{ steps.filter.outputs.inventory }}" = "true" ]    && services+=("inventory")
+          [ "${{ steps.filter.outputs.fulfillment }}" = "true" ]  && services+=("fulfillment")
+          [ "${{ steps.filter.outputs.notification }}" = "true" ] && services+=("notification")
+          if [ ${#services[@]} -eq 0 ]; then
+            echo "go_matrix=[]" >> "$GITHUB_OUTPUT"
+          else
+            json=$(printf '%s\n' "${services[@]}" | jq -R . | jq -cs .)
+            echo "go_matrix=${json}" >> "$GITHUB_OUTPUT"
+          fi
+
+  go:
+    needs: changes
+    if: ${{ needs.changes.outputs.go_matrix != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.go_matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: services/${{ matrix.service }}/go.sum
+      - name: Format check
+        working-directory: services/${{ matrix.service }}
+        run: test -z "$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
+      - name: Vet
+        working-directory: services/${{ matrix.service }}
+        run: go vet ./...
+      - name: Build
+        working-directory: services/${{ matrix.service }}
+        run: go build ./...
+      - name: Test
+        working-directory: services/${{ matrix.service }}
+        run: go test ./...
+
+  payment:
+    needs: changes
+    if: ${{ needs.changes.outputs.payment == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Test
+        working-directory: services/payment
+        run: mvn -B test
+
+  terraform:
+    needs: changes
+    if: ${{ needs.changes.outputs.terraform == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Format check
+        run: terraform fmt -check -recursive
+      - name: Init (no backend)
+        run: terraform init -backend=false
+      - name: Validate
+        run: terraform validate
+
+  helm:
+    needs: changes
+    if: ${{ needs.changes.outputs.deploy == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint and template every service
+        run: |
+          for s in order inventory payment fulfillment notification; do
+            echo "== $s =="
+            helm lint deploy/helm/app -f deploy/helm/values/$s.yaml
+            helm template "$s" deploy/helm/app -f deploy/helm/values/$s.yaml \
+              -n order-fulfillment > /dev/null
+          done
