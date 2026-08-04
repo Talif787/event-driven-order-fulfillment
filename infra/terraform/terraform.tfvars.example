@@ -1,0 +1,13 @@
+region      = "us-east-1"
+project     = "order-fulfillment"
+environment = "dev"
+
+# The cost gate. Leave false to validate and to apply only the (free) ECR
+# repositories. Set true to plan or apply the full billable stack.
+enable_data_plane = false
+
+# Data-plane sizing (only relevant when enable_data_plane = true).
+eks_cluster_version   = "1.30"
+eks_node_desired_size = 3
+kafka_broker_instance_type = "kafka.t3.small"
+rds_instance_class    = "db.t4g.micro"
