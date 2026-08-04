@@ -19,3 +19,23 @@ go.work.sum
 # Coverage
 coverage.out
 coverage.html
+
+# Terraform working files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Variable files that may hold secrets (keep the example)
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+
+# Plan output
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
