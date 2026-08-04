@@ -14,10 +14,10 @@ import (
 
 // PlaceOrderLine is a transport-agnostic input line.
 type PlaceOrderLine struct {
-	SKU              string
-	Quantity         int32
-	UnitPriceMinor   int64
-	Currency         string
+	SKU            string
+	Quantity       int32
+	UnitPriceMinor int64
+	Currency       string
 }
 
 // PlaceOrderCommand is the application input for placing an order.
@@ -35,9 +35,9 @@ type ShipTo struct {
 
 // PlaceOrderResult reports the outcome of a placement.
 type PlaceOrderResult struct {
-	OrderID     string
-	Status      string
-	Idempotent  bool
+	OrderID    string
+	Status     string
+	Idempotent bool
 }
 
 // PlaceOrderHandler orchestrates the place-order use case.

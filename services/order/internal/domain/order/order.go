@@ -128,10 +128,10 @@ func (o *Order) UncommittedChanges() []DomainEvent { return o.changes }
 // MarkChangesCommitted clears staged events after a successful persist.
 func (o *Order) MarkChangesCommitted() { o.changes = nil }
 
-func (o *Order) ID() OrderID          { return o.id }
+func (o *Order) ID() OrderID            { return o.id }
 func (o *Order) CustomerID() CustomerID { return o.customerID }
-func (o *Order) Items() []LineItem    { return o.items }
-func (o *Order) ShipTo() Address      { return o.shipTo }
-func (o *Order) Total() Money         { return o.total }
-func (o *Order) Status() Status       { return o.status }
-func (o *Order) Version() int64       { return o.version }
+func (o *Order) Items() []LineItem      { return o.items }
+func (o *Order) ShipTo() Address        { return o.shipTo }
+func (o *Order) Total() Money           { return o.total }
+func (o *Order) Status() Status         { return o.status }
+func (o *Order) Version() int64         { return o.version }

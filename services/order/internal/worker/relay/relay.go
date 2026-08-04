@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/orderfulfillment/order/internal/app"
+	"github.com/orderfulfillment/order/internal/infra/metrics"
 )
 
 // Store drains a batch of outbox rows, publishing them via the supplied func
@@ -40,6 +41,9 @@ func (w *Worker) Run(ctx context.Context) error {
 			return nil
 		}
 		processed, err := w.store.DrainBatch(ctx, w.batchSize, w.publisher.Publish)
+		if processed > 0 {
+			metrics.OutboxRelayed.WithLabelValues(metrics.Service).Add(float64(processed))
+		}
 		switch {
 		case err != nil:
 			if ctx.Err() != nil {

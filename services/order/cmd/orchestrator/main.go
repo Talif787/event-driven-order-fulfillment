@@ -6,12 +6,14 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/orderfulfillment/order/internal/app/command"
 	"github.com/orderfulfillment/order/internal/app/saga"
 	"github.com/orderfulfillment/order/internal/infra/config"
 	"github.com/orderfulfillment/order/internal/infra/inventory"
 	"github.com/orderfulfillment/order/internal/infra/logging"
+	"github.com/orderfulfillment/order/internal/infra/metrics"
 	"github.com/orderfulfillment/order/internal/infra/payment"
 	"github.com/orderfulfillment/order/internal/infra/postgres"
 	"github.com/orderfulfillment/order/internal/infra/system"
@@ -27,11 +29,19 @@ type orderController struct {
 }
 
 func (c orderController) Confirm(ctx context.Context, orderID string) error {
-	return c.confirm.Handle(ctx, orderID)
+	err := c.confirm.Handle(ctx, orderID)
+	if err == nil {
+		metrics.SagaOutcomes.WithLabelValues("confirmed").Inc()
+	}
+	return err
 }
 
 func (c orderController) Cancel(ctx context.Context, orderID, reason string) error {
-	return c.cancel.Handle(ctx, orderID, reason)
+	err := c.cancel.Handle(ctx, orderID, reason)
+	if err == nil {
+		metrics.SagaOutcomes.WithLabelValues("cancelled").Inc()
+	}
+	return err
 }
 
 func main() {
@@ -52,6 +62,13 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	metricsSrv := metrics.StartServer(cfg.MetricsAddr, logger)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = metricsSrv.Shutdown(shutdownCtx)
+	}()
 
 	tel, err := telemetry.Setup(ctx, name, cfg.Environment, cfg.Telemetry.OTLPEndpoint, cfg.Telemetry.SampleRatio)
 	if err != nil {

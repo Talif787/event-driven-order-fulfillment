@@ -29,13 +29,13 @@ const (
 
 // OrderPlacedV1 is the integration event emitted when an order is accepted.
 type OrderPlacedV1 struct {
-	OrderID    string      `json:"orderId"`
-	CustomerID string      `json:"customerId"`
-	Items      []LineItem  `json:"items"`
-	ShipTo     Address     `json:"shipTo"`
-	TotalMinor int64       `json:"totalMinor"`
-	Currency   string      `json:"currency"`
-	PlacedAt   string      `json:"placedAt"`
+	OrderID    string     `json:"orderId"`
+	CustomerID string     `json:"customerId"`
+	Items      []LineItem `json:"items"`
+	ShipTo     Address    `json:"shipTo"`
+	TotalMinor int64      `json:"totalMinor"`
+	Currency   string     `json:"currency"`
+	PlacedAt   string     `json:"placedAt"`
 }
 
 // LineItem is one ordered line on the wire.

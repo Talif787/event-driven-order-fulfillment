@@ -10,13 +10,13 @@ import (
 
 // storedOrderPlaced is the persisted representation of the OrderPlaced event.
 type storedOrderPlaced struct {
-	OrderID    string            `json:"orderId"`
-	CustomerID string            `json:"customerId"`
-	Items      []storedLineItem  `json:"items"`
-	ShipTo     storedAddress     `json:"shipTo"`
-	TotalMinor int64             `json:"totalMinor"`
-	Currency   string            `json:"currency"`
-	PlacedAt   time.Time         `json:"placedAt"`
+	OrderID    string           `json:"orderId"`
+	CustomerID string           `json:"customerId"`
+	Items      []storedLineItem `json:"items"`
+	ShipTo     storedAddress    `json:"shipTo"`
+	TotalMinor int64            `json:"totalMinor"`
+	Currency   string           `json:"currency"`
+	PlacedAt   time.Time        `json:"placedAt"`
 }
 
 type storedLineItem struct {

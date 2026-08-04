@@ -95,4 +95,3 @@ func (e *validationError) Error() string { return e.msg }
 func (e *validationError) Is(target error) bool {
 	return target == order.ErrValidation
 }
-

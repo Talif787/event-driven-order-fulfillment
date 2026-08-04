@@ -4,9 +4,9 @@ package http
 // is taken from the authenticated principal when auth is enabled; the body
 // field is used only in unauthenticated local development.
 type placeOrderRequest struct {
-	CustomerID string        `json:"customerId,omitempty"`
-	Items      []itemDTO     `json:"items"`
-	ShipTo     addressDTO    `json:"shipTo"`
+	CustomerID string     `json:"customerId,omitempty"`
+	Items      []itemDTO  `json:"items"`
+	ShipTo     addressDTO `json:"shipTo"`
 }
 
 type itemDTO struct {

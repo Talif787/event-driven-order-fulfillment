@@ -6,10 +6,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/orderfulfillment/order/internal/app/projection"
 	"github.com/orderfulfillment/order/internal/infra/config"
 	"github.com/orderfulfillment/order/internal/infra/logging"
+	"github.com/orderfulfillment/order/internal/infra/metrics"
 	"github.com/orderfulfillment/order/internal/infra/postgres"
 	"github.com/orderfulfillment/order/internal/infra/telemetry"
 	"github.com/orderfulfillment/order/internal/worker/projector"
@@ -32,6 +34,13 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	metricsSrv := metrics.StartServer(cfg.MetricsAddr, logger)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = metricsSrv.Shutdown(shutdownCtx)
+	}()
 
 	tel, err := telemetry.Setup(ctx, cfg.ServiceName+"-projector", cfg.Environment, cfg.Telemetry.OTLPEndpoint, cfg.Telemetry.SampleRatio)
 	if err != nil {

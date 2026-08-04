@@ -2,8 +2,8 @@ package command
 
 import (
 	"context"
-	"log/slog"
 	"io"
+	"log/slog"
 	"testing"
 	"time"
 

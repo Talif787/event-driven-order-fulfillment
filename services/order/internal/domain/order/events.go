@@ -20,17 +20,17 @@ type DomainEvent interface {
 
 // OrderPlaced is emitted when an order is accepted.
 type OrderPlaced struct {
-	OrderID     OrderID
-	CustomerID  CustomerID
-	Items       []LineItem
-	ShipTo      Address
-	Total       Money
-	PlacedAt    time.Time
+	OrderID    OrderID
+	CustomerID CustomerID
+	Items      []LineItem
+	ShipTo     Address
+	Total      Money
+	PlacedAt   time.Time
 }
 
-func (e OrderPlaced) EventType() EventType   { return OrderPlacedType }
-func (e OrderPlaced) OccurredAt() time.Time  { return e.PlacedAt }
-func (e OrderPlaced) AggregateID() OrderID   { return e.OrderID }
+func (e OrderPlaced) EventType() EventType  { return OrderPlacedType }
+func (e OrderPlaced) OccurredAt() time.Time { return e.PlacedAt }
+func (e OrderPlaced) AggregateID() OrderID  { return e.OrderID }
 
 // OrderConfirmed is emitted when the saga completes successfully: stock is
 // committed and payment is captured.
