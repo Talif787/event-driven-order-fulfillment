@@ -26,6 +26,12 @@ help:
 	@echo "  pay-test         Run the Payment service tests (mvn test)"
 	@echo "  pay-run          Run the Payment service locally"
 	@echo "  pay-smoke        Print the payment capture and webhook demo"
+	@echo "  ful-tidy         Resolve Fulfillment module dependencies (requires network)"
+	@echo "  ful-build        Build the Fulfillment api, migrate, and consumer binaries"
+	@echo "  ful-test         Run the Fulfillment service tests"
+	@echo "  ful-run-api      Run the Fulfillment api locally"
+	@echo "  ful-run-consumer Run the Fulfillment consumer locally"
+	@echo "  ful-smoke        Print the shipment lifecycle demo"
 
 tidy:
 	cd $(SERVICE_DIR) && go mod tidy
@@ -197,3 +203,52 @@ pay-smoke:
 	@echo ""
 	@echo "An unsigned webhook returns 401; a duplicate eventId is a no-op. Skip the webhook"
 	@echo "and the reconciliation sweep settles it on its own after about two minutes."
+
+# ============================================================================
+# Fulfillment service (Phase 5). Go module; HTTP api on 8083, own db on 5435.
+# The consumer reacts to order.confirmed and opens a shipment; the api advances
+# it. Both emit to fulfillment.events.
+# ============================================================================
+FULFILLMENT_DIR := services/fulfillment
+FULFILLMENT_DATABASE_URL ?= postgres://fulfillment:fulfillment@localhost:5435/fulfillment?sslmode=disable
+
+.PHONY: ful-tidy ful-build ful-test ful-run-api ful-run-consumer ful-smoke
+
+ful-tidy:
+	cd $(FULFILLMENT_DIR) && go mod tidy
+
+ful-build:
+	cd $(FULFILLMENT_DIR) && \
+		go build -o ../../bin/fulfillment-api ./cmd/api && \
+		go build -o ../../bin/fulfillment-migrate ./cmd/migrate && \
+		go build -o ../../bin/fulfillment-consumer ./cmd/consumer
+
+ful-test:
+	cd $(FULFILLMENT_DIR) && go test ./...
+
+ful-run-api:
+	cd $(FULFILLMENT_DIR) && DATABASE_URL="$(FULFILLMENT_DATABASE_URL)" KAFKA_BROKERS="$(KAFKA_BROKERS)" go run ./cmd/api
+
+ful-run-consumer:
+	cd $(FULFILLMENT_DIR) && DATABASE_URL="$(FULFILLMENT_DATABASE_URL)" KAFKA_BROKERS="$(KAFKA_BROKERS)" go run ./cmd/consumer
+
+ful-smoke:
+	@echo "Fulfillment smoke test (stack up: make compose-up). API on :8083."
+	@echo "The consumer opens a shipment when an order is confirmed; the API advances it."
+	@echo ""
+	@echo "1. Seed stock, place an order, and let the saga confirm it (approve path):"
+	@echo "   curl -s -XPUT localhost:8081/v1/stock/SKU-CLASSIC-TEE -H 'Content-Type: application/json' -d '{\"available\":100}'"
+	@echo "   curl -s -XPOST localhost:8080/v1/orders -H 'Content-Type: application/json' -H 'Idempotency-Key: ful-demo-1' -d @docs/sample-order.json"
+	@echo "2. The fulfillment consumer reacts to order.confirmed. Read the shipment (status CREATED):"
+	@echo "   curl -s localhost:8083/v1/shipments/<order-id-from-step-1>"
+	@echo "3. Dispatch it (status DISPATCHED, emits shipment.dispatched):"
+	@echo "   curl -s -XPOST localhost:8083/v1/shipments/<order-id>/dispatch -H 'Content-Type: application/json' -d '{\"carrier\":\"UPS\",\"trackingCode\":\"1Z999\"}'"
+	@echo "4. Deliver it (status DELIVERED, emits shipment.delivered):"
+	@echo "   curl -s -XPOST localhost:8083/v1/shipments/<order-id>/deliver"
+	@echo "5. Read it back to confirm the terminal state:"
+	@echo "   curl -s localhost:8083/v1/shipments/<order-id>"
+	@echo ""
+	@echo "Creation is idempotent on order id, so a redelivered order.confirmed is a no-op."
+	@echo "Re-dispatch or re-deliver is an idempotent no-op; illegal jumps (deliver before"
+	@echo "dispatch) return 409 INVALID_STATE. Tail events with the console consumer:"
+	@echo "   docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic fulfillment.events --from-beginning"
