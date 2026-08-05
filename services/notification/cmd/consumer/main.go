@@ -10,6 +10,7 @@ import (
 
 	"github.com/orderfulfillment/notification/internal/app"
 	"github.com/orderfulfillment/notification/internal/infra/config"
+	"github.com/orderfulfillment/notification/internal/infra/deadletter"
 	"github.com/orderfulfillment/notification/internal/infra/logging"
 	"github.com/orderfulfillment/notification/internal/infra/metrics"
 	"github.com/orderfulfillment/notification/internal/infra/notifier"
@@ -62,7 +63,10 @@ func run() error {
 		app.SystemClock{},
 		logger,
 	)
-	worker := consumer.NewWorker(cfg.Kafka.Brokers, cfg.Consumer.Topics, cfg.Consumer.GroupID, dispatcher, logger, tel.Tracer())
+	dlq := deadletter.NewPublisher(cfg.Kafka.Brokers, cfg.DeadLetterTopic)
+	defer func() { _ = dlq.Close() }()
+
+	worker := consumer.NewWorker(cfg.Kafka.Brokers, cfg.Consumer.Topics, cfg.Consumer.GroupID, dispatcher, logger, tel.Tracer(), dlq)
 	defer func() { _ = worker.Close() }()
 
 	logger.Info("notification consumer connecting",
