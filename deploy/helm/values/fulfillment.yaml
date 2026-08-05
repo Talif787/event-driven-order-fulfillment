@@ -19,6 +19,7 @@ env:
   CONSUMER_TOPICS: orders.events
   FULFILLMENT_EVENTS_TOPIC: fulfillment.events
   METRICS_ADDR: ":9090"
+  DEAD_LETTER_TOPIC: dead-letter
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability:4318
 
 metrics:
