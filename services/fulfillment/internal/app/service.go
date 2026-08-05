@@ -17,11 +17,16 @@ import (
 // is confirmed and advances it through dispatch and delivery, publishing an
 // event on each real state change.
 //
-// Events are published after the database write. This is a deliberate
-// simplification: a crash between the commit and the publish could drop an
-// event. The transactional outbox used by the order service is the production
-// hardening; it is deferred here. Downstream consumers dedupe, so a retry that
-// republishes is harmless.
+// Events are published after the database write, not through a transactional
+// outbox. This was evaluated against the order service's outbox and deliberately
+// deferred, not overlooked: CreateForOrder republishes shipment.created while
+// the shipment is in CREATED, and the consumer's at-least-once redelivery
+// re-triggers it, so a created event lost to a publish failure is already
+// recovered without an outbox. Only the operator-triggered dispatch and deliver
+// transitions carry a residual dual-write window, and downstream consumers
+// dedupe, so the outbox's cost (a write-path refactor for a narrow, partially
+// recovered gap) was not judged worth it here. The order service, whose saga
+// events cannot tolerate loss, does use the outbox.
 type Service struct {
 	repo      ShipmentRepository
 	publisher EventPublisher
