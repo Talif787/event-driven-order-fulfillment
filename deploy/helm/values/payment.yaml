@@ -16,6 +16,10 @@ env:
   # DATABASE_URL (jdbc), DATABASE_USER, DATABASE_PASSWORD, and
   # PAYMENT_WEBHOOK_SECRET live in the payment-secrets Secret.
 
+metrics:
+  enabled: true
+  path: /actuator/prometheus
+
 workloads:
   - name: api
     image: payment-api

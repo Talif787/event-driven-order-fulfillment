@@ -5,6 +5,7 @@ import com.orderfulfillment.payment.application.port.PaymentGateway;
 import com.orderfulfillment.payment.application.port.PaymentGateway.GatewayResult;
 import com.orderfulfillment.payment.application.port.PaymentRepository;
 import com.orderfulfillment.payment.domain.Payment;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -27,7 +28,8 @@ class PaymentServiceTest {
     private final PaymentRepository payments = mock(PaymentRepository.class);
     private final PaymentGateway gateway = mock(PaymentGateway.class);
     private final PaymentEventPublisher events = mock(PaymentEventPublisher.class);
-    private final PaymentService service = new PaymentService(payments, gateway, events);
+    private final PaymentService service =
+            new PaymentService(payments, gateway, events, new SimpleMeterRegistry());
 
     private final UUID orderId = UUID.randomUUID();
 
