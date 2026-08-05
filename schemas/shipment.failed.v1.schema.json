@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.orderfulfillment.dev/shipment.failed.v1.json",
+  "title": "shipment.failed.v1",
+  "description": "Emitted when a shipment fails.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "shipmentId",
+    "orderId",
+    "reason",
+    "failedAt"
+  ],
+  "properties": {
+    "shipmentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "failedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

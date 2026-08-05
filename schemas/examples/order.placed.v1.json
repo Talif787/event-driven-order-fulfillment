@@ -1,0 +1,22 @@
+{
+  "orderId": "8f1d1e2a-1c3b-4a5d-9e6f-0a1b2c3d4e5f",
+  "customerId": "1a2b3c4d-5e6f-4071-8182-93a4b5c6d7e8",
+  "items": [
+    {
+      "sku": "SKU-100",
+      "quantity": 2,
+      "unitPriceMinor": 1499
+    }
+  ],
+  "shipTo": {
+    "line1": "1 Main St",
+    "line2": "",
+    "city": "Boston",
+    "region": "MA",
+    "postalCode": "02118",
+    "country": "US"
+  },
+  "totalMinor": 2998,
+  "currency": "USD",
+  "placedAt": "2026-02-01T12:00:00Z"
+}

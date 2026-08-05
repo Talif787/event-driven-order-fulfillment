@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.orderfulfillment.dev/order.confirmed.v1.json",
+  "title": "order.confirmed.v1",
+  "description": "Emitted when the saga confirms an order.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "orderId",
+    "confirmedAt"
+  ],
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "confirmedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
