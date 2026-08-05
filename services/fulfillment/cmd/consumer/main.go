@@ -10,6 +10,7 @@ import (
 
 	"github.com/orderfulfillment/fulfillment/internal/app"
 	"github.com/orderfulfillment/fulfillment/internal/infra/config"
+	"github.com/orderfulfillment/fulfillment/internal/infra/deadletter"
 	infrakafka "github.com/orderfulfillment/fulfillment/internal/infra/kafka"
 	"github.com/orderfulfillment/fulfillment/internal/infra/logging"
 	"github.com/orderfulfillment/fulfillment/internal/infra/metrics"
@@ -61,7 +62,10 @@ func run() error {
 	defer func() { _ = publisher.Close() }()
 
 	service := app.NewService(postgres.NewShipmentRepository(pool), publisher, app.SystemClock{}, logger)
-	worker := consumer.NewWorker(cfg.Kafka.Brokers, cfg.Consumer.Topics, cfg.Consumer.GroupID, service, logger, tel.Tracer())
+	dlq := deadletter.NewPublisher(cfg.Kafka.Brokers, cfg.Consumer.DeadLetterTopic)
+	defer func() { _ = dlq.Close() }()
+
+	worker := consumer.NewWorker(cfg.Kafka.Brokers, cfg.Consumer.Topics, cfg.Consumer.GroupID, service, logger, tel.Tracer(), dlq)
 	defer func() { _ = worker.Close() }()
 
 	logger.Info("fulfillment consumer connecting",
