@@ -6,6 +6,7 @@ import com.orderfulfillment.payment.application.port.PaymentGateway;
 import com.orderfulfillment.payment.application.port.PaymentGateway.GatewayResult;
 import com.orderfulfillment.payment.application.port.PaymentRepository;
 import com.orderfulfillment.payment.domain.Payment;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -29,11 +30,14 @@ public class PaymentService {
     private final PaymentRepository payments;
     private final PaymentGateway gateway;
     private final PaymentEventPublisher events;
+    private final MeterRegistry meters;
 
-    public PaymentService(PaymentRepository payments, PaymentGateway gateway, PaymentEventPublisher events) {
+    public PaymentService(PaymentRepository payments, PaymentGateway gateway,
+                          PaymentEventPublisher events, MeterRegistry meters) {
         this.payments = payments;
         this.gateway = gateway;
         this.events = events;
+        this.meters = meters;
     }
 
     @Transactional
@@ -66,6 +70,7 @@ public class PaymentService {
         }
 
         events.publish(PaymentEvent.of(eventType, payment));
+        meters.counter("payments_total", "outcome", result.approved() ? "captured" : "declined").increment();
         log.info("capture orderId={} status={} reference={}",
                 payment.getOrderId(), payment.getStatus(), payment.getProviderReference());
         return PaymentResult.of(payment);

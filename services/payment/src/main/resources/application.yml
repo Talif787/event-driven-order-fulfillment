@@ -32,11 +32,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      service: payment
 
 payment:
   events-topic: ${PAYMENT_EVENTS_TOPIC:payments.events}
