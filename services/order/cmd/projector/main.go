@@ -10,6 +10,7 @@ import (
 
 	"github.com/orderfulfillment/order/internal/app/projection"
 	"github.com/orderfulfillment/order/internal/infra/config"
+	"github.com/orderfulfillment/order/internal/infra/deadletter"
 	"github.com/orderfulfillment/order/internal/infra/logging"
 	"github.com/orderfulfillment/order/internal/infra/metrics"
 	"github.com/orderfulfillment/order/internal/infra/postgres"
@@ -55,7 +56,10 @@ func run() error {
 	defer pool.Close()
 
 	service := projection.NewService(postgres.NewProjectionRepository(pool), logger, tel.Tracer())
-	worker := projector.NewWorker(cfg.Kafka.Brokers, cfg.Projector.Topics, cfg.Projector.GroupID, service, logger)
+	dlq := deadletter.NewPublisher(cfg.Kafka.Brokers, cfg.DeadLetterTopic)
+	defer func() { _ = dlq.Close() }()
+
+	worker := projector.NewWorker(cfg.Kafka.Brokers, cfg.Projector.Topics, cfg.Projector.GroupID, service, logger, dlq)
 	defer func() { _ = worker.Close() }()
 
 	logger.Info("projector connecting", slog.Any("brokers", cfg.Kafka.Brokers), slog.Any("topics", cfg.Projector.Topics))

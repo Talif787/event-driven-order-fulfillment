@@ -10,6 +10,7 @@ import (
 	"github.com/orderfulfillment/order/internal/app"
 	"github.com/orderfulfillment/order/internal/contracts"
 	"github.com/orderfulfillment/order/internal/domain/order"
+	"github.com/orderfulfillment/order/internal/infra/deadletter"
 )
 
 // Service applies integration events to the order read model. It is the first
@@ -46,11 +47,11 @@ func (s *Service) Apply(ctx context.Context, eventType string, payload []byte) e
 func (s *Service) applyOrderPlaced(ctx context.Context, payload []byte) error {
 	event, err := contracts.UnmarshalOrderPlaced(payload)
 	if err != nil {
-		return err
+		return deadletter.Permanent(err)
 	}
 	placedAt, err := event.ParsePlacedAt()
 	if err != nil {
-		return err
+		return deadletter.Permanent(err)
 	}
 	if err := s.store.UpsertOrderPlaced(ctx, app.OrderProjection{
 		OrderID:    event.OrderID,
@@ -70,7 +71,7 @@ func (s *Service) applyOrderPlaced(ctx context.Context, payload []byte) error {
 func (s *Service) applyOrderConfirmed(ctx context.Context, payload []byte) error {
 	event, err := contracts.UnmarshalOrderConfirmed(payload)
 	if err != nil {
-		return err
+		return deadletter.Permanent(err)
 	}
 	if err := s.store.UpdateStatus(ctx, event.OrderID, string(order.StatusConfirmed)); err != nil {
 		return fmt.Errorf("apply order.confirmed: %w", err)
@@ -83,7 +84,7 @@ func (s *Service) applyOrderConfirmed(ctx context.Context, payload []byte) error
 func (s *Service) applyOrderCancelled(ctx context.Context, payload []byte) error {
 	event, err := contracts.UnmarshalOrderCancelled(payload)
 	if err != nil {
-		return err
+		return deadletter.Permanent(err)
 	}
 	if err := s.store.UpdateStatus(ctx, event.OrderID, string(order.StatusCancelled)); err != nil {
 		return fmt.Errorf("apply order.cancelled: %w", err)
