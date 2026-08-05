@@ -16,6 +16,7 @@ import (
 
 	"github.com/orderfulfillment/order/internal/app/saga"
 	"github.com/orderfulfillment/order/internal/contracts"
+	"github.com/orderfulfillment/order/internal/infra/tracing"
 )
 
 // Worker consumes order events and runs the saga on order.placed.
@@ -60,7 +61,8 @@ func (w *Worker) Run(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("unmarshal order.placed at offset %d: %w", msg.Offset, err)
 			}
-			if err := w.orchestrator.Handle(ctx, event); err != nil {
+			msgCtx := tracing.ExtractFromKafka(ctx, msg.Headers)
+			if err := w.orchestrator.Handle(msgCtx, event); err != nil {
 				return fmt.Errorf("run saga for order %s at offset %d: %w", event.OrderID, msg.Offset, err)
 			}
 		}

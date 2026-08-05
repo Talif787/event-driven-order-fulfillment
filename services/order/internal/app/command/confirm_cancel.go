@@ -10,6 +10,7 @@ import (
 	"github.com/orderfulfillment/order/internal/app"
 	"github.com/orderfulfillment/order/internal/contracts"
 	"github.com/orderfulfillment/order/internal/domain/order"
+	"github.com/orderfulfillment/order/internal/infra/tracing"
 )
 
 // ConfirmOrderHandler confirms a pending order (the saga success terminal). It
@@ -49,6 +50,9 @@ func (h *ConfirmOrderHandler) Handle(ctx context.Context, orderID string) error 
 	outbox, err := lifecycleOutbox(changes)
 	if err != nil {
 		return err
+	}
+	for i := range outbox {
+		tracing.InjectToMap(ctx, outbox[i].Headers)
 	}
 	expected := agg.Version() - int64(len(changes))
 	if err := h.repo.Save(ctx, agg, expected, outbox); err != nil {
@@ -95,6 +99,9 @@ func (h *CancelOrderHandler) Handle(ctx context.Context, orderID, reason string)
 	outbox, err := lifecycleOutbox(changes)
 	if err != nil {
 		return err
+	}
+	for i := range outbox {
+		tracing.InjectToMap(ctx, outbox[i].Headers)
 	}
 	expected := agg.Version() - int64(len(changes))
 	if err := h.repo.Save(ctx, agg, expected, outbox); err != nil {
