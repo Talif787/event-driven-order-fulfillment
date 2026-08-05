@@ -19,6 +19,7 @@ import (
 
 	"github.com/orderfulfillment/fulfillment/internal/app"
 	"github.com/orderfulfillment/fulfillment/internal/contracts"
+	"github.com/orderfulfillment/fulfillment/internal/infra/deadletter"
 	"github.com/orderfulfillment/fulfillment/internal/infra/tracing"
 )
 
@@ -27,9 +28,10 @@ type Worker struct {
 	service *app.Service
 	logger  *slog.Logger
 	tracer  trace.Tracer
+	dlq     *deadletter.Publisher
 }
 
-func NewWorker(brokers, topics []string, groupID string, service *app.Service, logger *slog.Logger, tracer trace.Tracer) *Worker {
+func NewWorker(brokers, topics []string, groupID string, service *app.Service, logger *slog.Logger, tracer trace.Tracer, dlq *deadletter.Publisher) *Worker {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     brokers,
 		GroupID:     groupID,
@@ -37,7 +39,7 @@ func NewWorker(brokers, topics []string, groupID string, service *app.Service, l
 		MinBytes:    1,
 		MaxBytes:    10 << 20,
 	})
-	return &Worker{reader: reader, service: service, logger: logger, tracer: tracer}
+	return &Worker{reader: reader, service: service, logger: logger, tracer: tracer, dlq: dlq}
 }
 
 func (w *Worker) Run(ctx context.Context) error {
@@ -61,7 +63,14 @@ func (w *Worker) Run(ctx context.Context) error {
 		// reach fulfillment, and other event types are ignored.
 		if headerValue(msg.Headers, contracts.HeaderEventType) == contracts.TypeOrderConfirmed {
 			if err := w.handleConfirmed(ctx, msg); err != nil {
-				return err
+				if !errors.Is(err, deadletter.ErrPermanent) {
+					return err
+				}
+				if dlqErr := w.dlq.Publish(ctx, msg, err); dlqErr != nil {
+					return fmt.Errorf("dead-letter publish at offset %d: %w", msg.Offset, dlqErr)
+				}
+				w.logger.Warn("routed poison message to dead-letter",
+					slog.Int64("offset", msg.Offset), slog.String("error", err.Error()))
 			}
 		}
 
@@ -84,11 +93,11 @@ func (w *Worker) handleConfirmed(ctx context.Context, msg kafka.Message) error {
 
 	event, err := contracts.UnmarshalOrderConfirmed(msg.Value)
 	if err != nil {
-		return fmt.Errorf("unmarshal order.confirmed at offset %d: %w", msg.Offset, err)
+		return deadletter.Permanent(fmt.Errorf("unmarshal order.confirmed at offset %d: %w", msg.Offset, err))
 	}
 	orderID, err := uuid.Parse(event.OrderID)
 	if err != nil {
-		return fmt.Errorf("parse orderId %q at offset %d: %w", event.OrderID, msg.Offset, err)
+		return deadletter.Permanent(fmt.Errorf("parse orderId %q at offset %d: %w", event.OrderID, msg.Offset, err))
 	}
 	if _, err := w.service.CreateForOrder(ctx, orderID); err != nil {
 		return fmt.Errorf("create shipment for order %s at offset %d: %w", event.OrderID, msg.Offset, err)

@@ -36,8 +36,9 @@ type KafkaConfig struct {
 }
 
 type ConsumerConfig struct {
-	GroupID string
-	Topics  []string
+	GroupID         string
+	Topics          []string
+	DeadLetterTopic string
 }
 
 type TelemetryConfig struct {
@@ -78,8 +79,9 @@ func Load() (Config, error) {
 			EventsTopic: env("FULFILLMENT_EVENTS_TOPIC", "fulfillment.events"),
 		},
 		Consumer: ConsumerConfig{
-			GroupID: env("CONSUMER_GROUP_ID", "fulfillment"),
-			Topics:  envList("CONSUMER_TOPICS", []string{"orders.events"}),
+			GroupID:         env("CONSUMER_GROUP_ID", "fulfillment"),
+			Topics:          envList("CONSUMER_TOPICS", []string{"orders.events"}),
+			DeadLetterTopic: env("DEAD_LETTER_TOPIC", "dead-letter"),
 		},
 		Telemetry: TelemetryConfig{
 			OTLPEndpoint: env("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
