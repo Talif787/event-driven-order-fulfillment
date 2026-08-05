@@ -9,6 +9,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/orderfulfillment/inventory/internal/infra/config"
 	"github.com/orderfulfillment/inventory/internal/infra/logging"
@@ -33,6 +35,16 @@ type statusRecorder struct {
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
+}
+
+// traceExtractMiddleware reads W3C trace context from the incoming request so
+// the server continues the caller's trace. It runs outermost, before the
+// handlers open their spans.
+func traceExtractMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // correlationMiddleware ensures every request carries a correlation id, both in

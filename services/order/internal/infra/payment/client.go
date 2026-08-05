@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/orderfulfillment/order/internal/app/saga"
+	"github.com/orderfulfillment/order/internal/infra/tracing"
 )
 
 // Client calls the Payment service over HTTP. It implements saga.PaymentGateway
@@ -100,6 +101,7 @@ func (c *Client) authorizeOnce(ctx context.Context, raw []byte) (saga.PaymentRes
 		return saga.PaymentResult{}, false, fmt.Errorf("build payment request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	tracing.InjectToHTTP(ctx, httpReq.Header)
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {

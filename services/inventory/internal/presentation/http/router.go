@@ -26,6 +26,7 @@ func NewRouter(h *Handlers, health *HealthHandlers, cfg config.AuthConfig, logge
 	mux.HandleFunc("GET /healthz", health.Live)
 
 	business := chain(mux,
+		traceExtractMiddleware,
 		correlationMiddleware,
 		recoveryMiddleware(logger),
 		loggingMiddleware(logger),

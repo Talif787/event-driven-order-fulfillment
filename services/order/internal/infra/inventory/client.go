@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/orderfulfillment/order/internal/app/saga"
+	"github.com/orderfulfillment/order/internal/infra/tracing"
 )
 
 // Client calls the Inventory service over HTTP.
@@ -119,6 +120,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (int, er
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	tracing.InjectToHTTP(ctx, req.Header)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return 0, errorEnvelope{}, fmt.Errorf("call inventory %s %s: %w", method, path, err)
