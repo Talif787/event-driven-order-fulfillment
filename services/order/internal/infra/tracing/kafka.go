@@ -6,6 +6,7 @@ package tracing
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel"
@@ -17,6 +18,12 @@ import (
 // trace begins at the API request and rides the persisted event to Kafka.
 func InjectToMap(ctx context.Context, carrier map[string]string) {
 	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(carrier))
+}
+
+// InjectToHTTP writes the current trace context onto outgoing HTTP request
+// headers, so the receiving service continues this trace across the call.
+func InjectToHTTP(ctx context.Context, header http.Header) {
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(header))
 }
 
 // ExtractFromKafka returns a context carrying the trace context found in the
