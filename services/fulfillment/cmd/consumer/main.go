@@ -61,7 +61,7 @@ func run() error {
 	defer func() { _ = publisher.Close() }()
 
 	service := app.NewService(postgres.NewShipmentRepository(pool), publisher, app.SystemClock{}, logger)
-	worker := consumer.NewWorker(cfg.Kafka.Brokers, cfg.Consumer.Topics, cfg.Consumer.GroupID, service, logger)
+	worker := consumer.NewWorker(cfg.Kafka.Brokers, cfg.Consumer.Topics, cfg.Consumer.GroupID, service, logger, tel.Tracer())
 	defer func() { _ = worker.Close() }()
 
 	logger.Info("fulfillment consumer connecting",

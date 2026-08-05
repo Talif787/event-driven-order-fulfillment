@@ -8,6 +8,7 @@ import (
 
 	"github.com/orderfulfillment/fulfillment/internal/app"
 	"github.com/orderfulfillment/fulfillment/internal/contracts"
+	"github.com/orderfulfillment/fulfillment/internal/infra/tracing"
 )
 
 // Publisher writes fulfillment events to Kafka. It requires acknowledgement
@@ -36,11 +37,13 @@ func (p *Publisher) Publish(ctx context.Context, events ...app.Event) error {
 	}
 	messages := make([]kafka.Message, 0, len(events))
 	for _, e := range events {
+		headers := []kafka.Header{{Key: contracts.HeaderEventType, Value: []byte(e.Type)}}
+		tracing.InjectToKafkaHeaders(ctx, &headers)
 		messages = append(messages, kafka.Message{
 			Topic:   p.topic,
 			Key:     []byte(e.Key),
 			Value:   e.Payload,
-			Headers: []kafka.Header{{Key: contracts.HeaderEventType, Value: []byte(e.Type)}},
+			Headers: headers,
 		})
 	}
 	if err := p.writer.WriteMessages(ctx, messages...); err != nil {
