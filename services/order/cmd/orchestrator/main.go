@@ -11,6 +11,7 @@ import (
 	"github.com/orderfulfillment/order/internal/app/command"
 	"github.com/orderfulfillment/order/internal/app/saga"
 	"github.com/orderfulfillment/order/internal/infra/config"
+	"github.com/orderfulfillment/order/internal/infra/deadletter"
 	"github.com/orderfulfillment/order/internal/infra/inventory"
 	"github.com/orderfulfillment/order/internal/infra/logging"
 	"github.com/orderfulfillment/order/internal/infra/metrics"
@@ -105,7 +106,10 @@ func run() error {
 		tracer,
 	)
 
-	worker := orchestrator.NewWorker(cfg.Kafka.Brokers, cfg.Saga.Topics, cfg.Saga.GroupID, orch, logger)
+	dlq := deadletter.NewPublisher(cfg.Kafka.Brokers, cfg.DeadLetterTopic)
+	defer func() { _ = dlq.Close() }()
+
+	worker := orchestrator.NewWorker(cfg.Kafka.Brokers, cfg.Saga.Topics, cfg.Saga.GroupID, orch, logger, dlq)
 	defer func() { _ = worker.Close() }()
 
 	logger.Info("saga orchestrator connecting",

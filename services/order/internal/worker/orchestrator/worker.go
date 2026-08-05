@@ -16,6 +16,7 @@ import (
 
 	"github.com/orderfulfillment/order/internal/app/saga"
 	"github.com/orderfulfillment/order/internal/contracts"
+	"github.com/orderfulfillment/order/internal/infra/deadletter"
 	"github.com/orderfulfillment/order/internal/infra/tracing"
 )
 
@@ -24,9 +25,10 @@ type Worker struct {
 	reader       *kafka.Reader
 	orchestrator *saga.Orchestrator
 	logger       *slog.Logger
+	dlq          *deadletter.Publisher
 }
 
-func NewWorker(brokers, topics []string, groupID string, orch *saga.Orchestrator, logger *slog.Logger) *Worker {
+func NewWorker(brokers, topics []string, groupID string, orch *saga.Orchestrator, logger *slog.Logger, dlq *deadletter.Publisher) *Worker {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     brokers,
 		GroupID:     groupID,
@@ -34,7 +36,7 @@ func NewWorker(brokers, topics []string, groupID string, orch *saga.Orchestrator
 		MinBytes:    1,
 		MaxBytes:    10 << 20,
 	})
-	return &Worker{reader: reader, orchestrator: orch, logger: logger}
+	return &Worker{reader: reader, orchestrator: orch, logger: logger, dlq: dlq}
 }
 
 func (w *Worker) Run(ctx context.Context) error {
@@ -57,13 +59,15 @@ func (w *Worker) Run(ctx context.Context) error {
 		// The saga only reacts to placements. The confirmed and cancelled events
 		// it emits itself flow through this same topic and are ignored here.
 		if headerValue(msg.Headers, contracts.HeaderEventType) == contracts.TypeOrderPlaced {
-			event, err := contracts.UnmarshalOrderPlaced(msg.Value)
-			if err != nil {
-				return fmt.Errorf("unmarshal order.placed at offset %d: %w", msg.Offset, err)
-			}
-			msgCtx := tracing.ExtractFromKafka(ctx, msg.Headers)
-			if err := w.orchestrator.Handle(msgCtx, event); err != nil {
-				return fmt.Errorf("run saga for order %s at offset %d: %w", event.OrderID, msg.Offset, err)
+			if err := w.handlePlaced(ctx, msg); err != nil {
+				if !errors.Is(err, deadletter.ErrPermanent) {
+					return err
+				}
+				if dlqErr := w.dlq.Publish(ctx, msg, err); dlqErr != nil {
+					return fmt.Errorf("dead-letter publish at offset %d: %w", msg.Offset, dlqErr)
+				}
+				w.logger.Warn("routed poison message to dead-letter",
+					slog.Int64("offset", msg.Offset), slog.String("error", err.Error()))
 			}
 		}
 
@@ -77,6 +81,20 @@ func (w *Worker) Run(ctx context.Context) error {
 }
 
 func (w *Worker) Close() error { return w.reader.Close() }
+
+// handlePlaced runs the saga for one placement. An unparseable payload is
+// permanent (routed to the dead-letter topic); a saga failure is transient.
+func (w *Worker) handlePlaced(ctx context.Context, msg kafka.Message) error {
+	event, err := contracts.UnmarshalOrderPlaced(msg.Value)
+	if err != nil {
+		return deadletter.Permanent(fmt.Errorf("unmarshal order.placed at offset %d: %w", msg.Offset, err))
+	}
+	msgCtx := tracing.ExtractFromKafka(ctx, msg.Headers)
+	if err := w.orchestrator.Handle(msgCtx, event); err != nil {
+		return fmt.Errorf("run saga for order %s at offset %d: %w", event.OrderID, msg.Offset, err)
+	}
+	return nil
+}
 
 func headerValue(headers []kafka.Header, key string) string {
 	for _, h := range headers {

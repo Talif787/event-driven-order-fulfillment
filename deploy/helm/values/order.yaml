@@ -25,6 +25,7 @@ env:
   PAYMENT_BASE_URL: http://payment-api:8080
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability:4318
   METRICS_ADDR: ":9090"
+  DEAD_LETTER_TOPIC: dead-letter
 
 ingress:
   enabled: true

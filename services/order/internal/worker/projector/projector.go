@@ -11,6 +11,7 @@ import (
 
 	"github.com/orderfulfillment/order/internal/app/projection"
 	"github.com/orderfulfillment/order/internal/contracts"
+	"github.com/orderfulfillment/order/internal/infra/deadletter"
 	"github.com/orderfulfillment/order/internal/infra/metrics"
 	"github.com/orderfulfillment/order/internal/infra/tracing"
 )
@@ -25,9 +26,10 @@ type Worker struct {
 	reader  *kafka.Reader
 	service *projection.Service
 	logger  *slog.Logger
+	dlq     *deadletter.Publisher
 }
 
-func NewWorker(brokers, topics []string, groupID string, service *projection.Service, logger *slog.Logger) *Worker {
+func NewWorker(brokers, topics []string, groupID string, service *projection.Service, logger *slog.Logger, dlq *deadletter.Publisher) *Worker {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     brokers,
 		GroupID:     groupID,
@@ -35,7 +37,7 @@ func NewWorker(brokers, topics []string, groupID string, service *projection.Ser
 		MinBytes:    1,
 		MaxBytes:    10 << 20,
 	})
-	return &Worker{reader: reader, service: service, logger: logger}
+	return &Worker{reader: reader, service: service, logger: logger, dlq: dlq}
 }
 
 func (w *Worker) Run(ctx context.Context) error {
@@ -58,7 +60,14 @@ func (w *Worker) Run(ctx context.Context) error {
 		eventType := headerValue(msg.Headers, contracts.HeaderEventType)
 		msgCtx := tracing.ExtractFromKafka(ctx, msg.Headers)
 		if err := w.service.Apply(msgCtx, eventType, msg.Value); err != nil {
-			return fmt.Errorf("apply event %q at offset %d: %w", eventType, msg.Offset, err)
+			if !errors.Is(err, deadletter.ErrPermanent) {
+				return fmt.Errorf("apply event %q at offset %d: %w", eventType, msg.Offset, err)
+			}
+			if dlqErr := w.dlq.Publish(ctx, msg, err); dlqErr != nil {
+				return fmt.Errorf("dead-letter publish at offset %d: %w", msg.Offset, dlqErr)
+			}
+			w.logger.Warn("routed poison message to dead-letter",
+				slog.Int64("offset", msg.Offset), slog.String("error", err.Error()))
 		}
 
 		if err := w.reader.CommitMessages(ctx, msg); err != nil {
