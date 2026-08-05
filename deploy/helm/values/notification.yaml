@@ -16,6 +16,7 @@ env:
   CONSUMER_GROUP_ID: notification
   CONSUMER_TOPICS: orders.events,payments.events,fulfillment.events
   METRICS_ADDR: ":9090"
+  DEAD_LETTER_TOPIC: dead-letter
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability:4318
 
 metrics:

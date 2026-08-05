@@ -10,6 +10,7 @@ import (
 
 	"github.com/orderfulfillment/notification/internal/contracts"
 	"github.com/orderfulfillment/notification/internal/domain/notification"
+	"github.com/orderfulfillment/notification/internal/infra/deadletter"
 	"github.com/orderfulfillment/notification/internal/infra/metrics"
 )
 
@@ -40,7 +41,7 @@ type message struct {
 func (d *Dispatcher) Handle(ctx context.Context, eventType string, payload []byte) error {
 	msg, ok, err := render(eventType, payload)
 	if err != nil {
-		return err
+		return deadletter.Permanent(err)
 	}
 	if !ok {
 		return nil

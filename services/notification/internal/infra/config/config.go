@@ -12,13 +12,14 @@ import (
 // environment with safe local defaults and fail-fast validation. The
 // notification service is a pure consumer: it has no HTTP server and no auth.
 type Config struct {
-	ServiceName string
-	Environment string
-	MetricsAddr string
-	Database    DatabaseConfig
-	Kafka       KafkaConfig
-	Consumer    ConsumerConfig
-	Telemetry   TelemetryConfig
+	ServiceName     string
+	Environment     string
+	MetricsAddr     string
+	DeadLetterTopic string
+	Database        DatabaseConfig
+	Kafka           KafkaConfig
+	Consumer        ConsumerConfig
+	Telemetry       TelemetryConfig
 }
 
 type DatabaseConfig struct {
@@ -45,9 +46,10 @@ type TelemetryConfig struct {
 // Load reads configuration from the environment and validates it.
 func Load() (Config, error) {
 	cfg := Config{
-		ServiceName: env("SERVICE_NAME", "notification-service"),
-		Environment: env("ENVIRONMENT", "development"),
-		MetricsAddr: env("METRICS_ADDR", ":9090"),
+		ServiceName:     env("SERVICE_NAME", "notification-service"),
+		Environment:     env("ENVIRONMENT", "development"),
+		MetricsAddr:     env("METRICS_ADDR", ":9090"),
+		DeadLetterTopic: env("DEAD_LETTER_TOPIC", "dead-letter"),
 		Database: DatabaseConfig{
 			URL:             env("DATABASE_URL", "postgres://notification:notification@localhost:5436/notification?sslmode=disable"),
 			MaxConns:        int32(envInt("DB_MAX_CONNS", 10)),
