@@ -10,6 +10,7 @@ import (
 
 	"github.com/orderfulfillment/notification/internal/contracts"
 	"github.com/orderfulfillment/notification/internal/domain/notification"
+	"github.com/orderfulfillment/notification/internal/infra/metrics"
 )
 
 // Dispatcher turns an integration event into a notification and delivers it. It
@@ -66,7 +67,11 @@ func (d *Dispatcher) Handle(ctx context.Context, eventType string, payload []byt
 			slog.String("event_type", eventType), slog.String("order_id", msg.orderID.String()))
 		return nil
 	}
-	return d.sender.Send(ctx, n)
+	if err := d.sender.Send(ctx, n); err != nil {
+		return err
+	}
+	metrics.NotificationsSent.WithLabelValues(eventType).Inc()
+	return nil
 }
 
 // recipientFor stubs recipient resolution: a real system would look up the
