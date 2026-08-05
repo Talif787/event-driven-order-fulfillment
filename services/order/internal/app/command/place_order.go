@@ -10,6 +10,7 @@ import (
 	"github.com/orderfulfillment/order/internal/app"
 	"github.com/orderfulfillment/order/internal/contracts"
 	"github.com/orderfulfillment/order/internal/domain/order"
+	"github.com/orderfulfillment/order/internal/infra/tracing"
 )
 
 // PlaceOrderLine is a transport-agnostic input line.
@@ -96,6 +97,9 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd PlaceOrderCommand) (
 	outbox, err := toOutbox(agg)
 	if err != nil {
 		return PlaceOrderResult{}, err
+	}
+	for i := range outbox {
+		tracing.InjectToMap(ctx, outbox[i].Headers)
 	}
 	if err := h.repo.Save(ctx, agg, 0, outbox); err != nil {
 		return PlaceOrderResult{}, fmt.Errorf("persist order: %w", err)

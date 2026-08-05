@@ -12,6 +12,7 @@ import (
 	"github.com/orderfulfillment/order/internal/app/projection"
 	"github.com/orderfulfillment/order/internal/contracts"
 	"github.com/orderfulfillment/order/internal/infra/metrics"
+	"github.com/orderfulfillment/order/internal/infra/tracing"
 )
 
 // Worker consumes the order event stream and applies events to the read model.
@@ -55,7 +56,8 @@ func (w *Worker) Run(ctx context.Context) error {
 		}
 
 		eventType := headerValue(msg.Headers, contracts.HeaderEventType)
-		if err := w.service.Apply(ctx, eventType, msg.Value); err != nil {
+		msgCtx := tracing.ExtractFromKafka(ctx, msg.Headers)
+		if err := w.service.Apply(msgCtx, eventType, msg.Value); err != nil {
 			return fmt.Errorf("apply event %q at offset %d: %w", eventType, msg.Offset, err)
 		}
 
