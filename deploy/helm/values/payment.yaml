@@ -15,6 +15,14 @@ env:
   PAYMENT_GATEWAY_OUTCOME: approve
   # DATABASE_URL (jdbc), DATABASE_USER, DATABASE_PASSWORD, and
   # PAYMENT_WEBHOOK_SECRET live in the payment-secrets Secret.
+  # OpenTelemetry Java agent: traces only (metrics stay on Micrometer/Actuator).
+  JAVA_TOOL_OPTIONS: "-javaagent:/app/opentelemetry-javaagent.jar"
+  OTEL_SERVICE_NAME: payment-service
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_METRICS_EXPORTER: none
+  OTEL_LOGS_EXPORTER: none
 
 metrics:
   enabled: true
