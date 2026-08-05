@@ -14,6 +14,7 @@ import (
 type Config struct {
 	ServiceName string
 	Environment string
+	MetricsAddr string
 	Database    DatabaseConfig
 	Kafka       KafkaConfig
 	Consumer    ConsumerConfig
@@ -40,6 +41,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		ServiceName: env("SERVICE_NAME", "notification-service"),
 		Environment: env("ENVIRONMENT", "development"),
+		MetricsAddr: env("METRICS_ADDR", ":9090"),
 		Database: DatabaseConfig{
 			URL:             env("DATABASE_URL", "postgres://notification:notification@localhost:5436/notification?sslmode=disable"),
 			MaxConns:        int32(envInt("DB_MAX_CONNS", 10)),

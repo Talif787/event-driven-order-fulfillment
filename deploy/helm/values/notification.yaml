@@ -15,10 +15,15 @@ env:
   KAFKA_BROKERS: "REPLACE_WITH_MSK_BOOTSTRAP"
   CONSUMER_GROUP_ID: notification
   CONSUMER_TOPICS: orders.events,payments.events,fulfillment.events
+  METRICS_ADDR: ":9090"
+
+metrics:
+  enabled: true
 
 workloads:
   - name: consumer
     image: notification-consumer
+    port: 9090
     replicas: 1
     resources:
       requests: { cpu: 50m, memory: 64Mi }
