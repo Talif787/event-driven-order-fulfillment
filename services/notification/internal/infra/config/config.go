@@ -18,6 +18,7 @@ type Config struct {
 	Database    DatabaseConfig
 	Kafka       KafkaConfig
 	Consumer    ConsumerConfig
+	Telemetry   TelemetryConfig
 }
 
 type DatabaseConfig struct {
@@ -34,6 +35,11 @@ type KafkaConfig struct {
 type ConsumerConfig struct {
 	GroupID string
 	Topics  []string
+}
+
+type TelemetryConfig struct {
+	OTLPEndpoint string
+	SampleRatio  float64
 }
 
 // Load reads configuration from the environment and validates it.
@@ -54,6 +60,10 @@ func Load() (Config, error) {
 		Consumer: ConsumerConfig{
 			GroupID: env("CONSUMER_GROUP_ID", "notification"),
 			Topics:  envList("CONSUMER_TOPICS", []string{"orders.events", "payments.events", "fulfillment.events"}),
+		},
+		Telemetry: TelemetryConfig{
+			OTLPEndpoint: env("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+			SampleRatio:  envFloat("OTEL_TRACES_SAMPLER_RATIO", 1.0),
 		},
 	}
 	if err := cfg.validate(); err != nil {
@@ -105,6 +115,15 @@ func envInt(key string, fallback int) int {
 	if v, ok := os.LookupEnv(key); ok {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return fallback
+}
+
+func envFloat(key string, fallback float64) float64 {
+	if v, ok := os.LookupEnv(key); ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
 		}
 	}
 	return fallback

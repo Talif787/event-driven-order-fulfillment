@@ -14,6 +14,7 @@ import (
 	"github.com/orderfulfillment/notification/internal/infra/metrics"
 	"github.com/orderfulfillment/notification/internal/infra/notifier"
 	"github.com/orderfulfillment/notification/internal/infra/postgres"
+	"github.com/orderfulfillment/notification/internal/infra/telemetry"
 	"github.com/orderfulfillment/notification/internal/worker/consumer"
 )
 
@@ -36,6 +37,12 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	tel, err := telemetry.Setup(ctx, cfg.ServiceName, cfg.Environment, cfg.Telemetry.OTLPEndpoint, cfg.Telemetry.SampleRatio)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tel.Shutdown(context.Background()) }()
+
 	metricsSrv := metrics.StartServer(cfg.MetricsAddr, logger)
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -55,7 +62,7 @@ func run() error {
 		app.SystemClock{},
 		logger,
 	)
-	worker := consumer.NewWorker(cfg.Kafka.Brokers, cfg.Consumer.Topics, cfg.Consumer.GroupID, dispatcher, logger)
+	worker := consumer.NewWorker(cfg.Kafka.Brokers, cfg.Consumer.Topics, cfg.Consumer.GroupID, dispatcher, logger, tel.Tracer())
 	defer func() { _ = worker.Close() }()
 
 	logger.Info("notification consumer connecting",

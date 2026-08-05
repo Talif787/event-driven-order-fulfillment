@@ -14,18 +14,21 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/orderfulfillment/notification/internal/app"
 	"github.com/orderfulfillment/notification/internal/contracts"
+	"github.com/orderfulfillment/notification/internal/infra/tracing"
 )
 
 type Worker struct {
 	reader     *kafka.Reader
 	dispatcher *app.Dispatcher
 	logger     *slog.Logger
+	tracer     trace.Tracer
 }
 
-func NewWorker(brokers, topics []string, groupID string, dispatcher *app.Dispatcher, logger *slog.Logger) *Worker {
+func NewWorker(brokers, topics []string, groupID string, dispatcher *app.Dispatcher, logger *slog.Logger, tracer trace.Tracer) *Worker {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     brokers,
 		GroupID:     groupID,
@@ -33,7 +36,7 @@ func NewWorker(brokers, topics []string, groupID string, dispatcher *app.Dispatc
 		MinBytes:    1,
 		MaxBytes:    10 << 20,
 	})
-	return &Worker{reader: reader, dispatcher: dispatcher, logger: logger}
+	return &Worker{reader: reader, dispatcher: dispatcher, logger: logger, tracer: tracer}
 }
 
 func (w *Worker) Run(ctx context.Context) error {
@@ -54,7 +57,11 @@ func (w *Worker) Run(ctx context.Context) error {
 		}
 
 		eventType := headerValue(msg.Headers, contracts.HeaderEventType)
-		if err := w.dispatcher.Handle(ctx, eventType, msg.Value); err != nil {
+		msgCtx := tracing.ExtractFromKafka(ctx, msg.Headers)
+		msgCtx, span := w.tracer.Start(msgCtx, "notification.dispatch")
+		err = w.dispatcher.Handle(msgCtx, eventType, msg.Value)
+		span.End()
+		if err != nil {
 			return fmt.Errorf("handle %q at offset %d on %s: %w", eventType, msg.Offset, msg.Topic, err)
 		}
 
