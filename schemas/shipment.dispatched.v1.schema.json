@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.orderfulfillment.dev/shipment.dispatched.v1.json",
+  "title": "shipment.dispatched.v1",
+  "description": "Emitted when a shipment is dispatched.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "shipmentId",
+    "orderId",
+    "carrier",
+    "trackingCode",
+    "dispatchedAt"
+  ],
+  "properties": {
+    "shipmentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "carrier": {
+      "type": "string"
+    },
+    "trackingCode": {
+      "type": "string"
+    },
+    "dispatchedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

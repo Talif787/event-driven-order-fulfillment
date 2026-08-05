@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.orderfulfillment.dev/shipment.created.v1.json",
+  "title": "shipment.created.v1",
+  "description": "Emitted when a shipment is opened for a confirmed order.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "shipmentId",
+    "orderId",
+    "status",
+    "createdAt"
+  ],
+  "properties": {
+    "shipmentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

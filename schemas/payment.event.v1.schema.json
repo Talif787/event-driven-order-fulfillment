@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.orderfulfillment.dev/payment.event.v1.json",
+  "title": "payment.event.v1",
+  "description": "Shared shape for the payment.captured/declined/settled/refunded/failed events; status carries the outcome.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "orderId",
+    "amountMinor",
+    "currency",
+    "status"
+  ],
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amountMinor": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 3
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "CAPTURED",
+        "DECLINED",
+        "SETTLED",
+        "REFUNDED",
+        "FAILED"
+      ]
+    }
+  }
+}

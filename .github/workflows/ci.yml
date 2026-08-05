@@ -21,6 +21,7 @@ jobs:
       payment: ${{ steps.filter.outputs.payment }}
       terraform: ${{ steps.filter.outputs.terraform }}
       deploy: ${{ steps.filter.outputs.deploy }}
+      schemas: ${{ steps.filter.outputs.schemas }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -41,6 +42,8 @@ jobs:
               - 'infra/terraform/**'
             deploy:
               - 'deploy/**'
+            schemas:
+              - 'schemas/**'
       - id: set
         name: Build Go service matrix from changed paths
         run: |
@@ -130,3 +133,17 @@ jobs:
             helm template "$s" deploy/helm/app -f deploy/helm/values/$s.yaml \
               -n order-fulfillment > /dev/null
           done
+
+  schemas:
+    needs: changes
+    if: ${{ needs.changes.outputs.schemas == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install validator
+        run: pip install jsonschema
+      - name: Validate event schemas
+        run: python schemas/validate.py
