@@ -209,6 +209,7 @@ services:
       HTTP_ADDR: ":8080"
       DATABASE_URL: postgres://inventory:inventory@inventory-postgres:5432/inventory?sslmode=disable
       AUTH_ENABLED: "false"
+      CORS_ALLOWED_ORIGINS: "*"
     ports:
       - "8081:8080"
     depends_on:
@@ -251,6 +252,7 @@ services:
       SERVER_PORT: "8080"
       PAYMENT_EVENTS_TOPIC: payments.events
       PAYMENT_GATEWAY_OUTCOME: approve
+      CORS_ALLOWED_ORIGINS: "*"
     ports:
       - "8082:8080"
     depends_on:
@@ -306,6 +308,7 @@ services:
       KAFKA_BROKERS: kafka:9092
       FULFILLMENT_EVENTS_TOPIC: fulfillment.events
       AUTH_ENABLED: "false"
+      CORS_ALLOWED_ORIGINS: "*"
     ports:
       - "8083:8080"
     depends_on:

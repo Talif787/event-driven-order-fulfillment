@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -111,6 +112,40 @@ func metricsMiddleware(next http.Handler) http.Handler {
 		metrics.HTTPRequests.WithLabelValues(metrics.Service, r.Method, path, strconv.Itoa(rec.status)).Inc()
 		metrics.HTTPDuration.WithLabelValues(metrics.Service, r.Method, path).Observe(time.Since(start).Seconds())
 	})
+}
+
+// corsMiddleware answers CORS preflight and sets the allow headers for browser
+// clients on a different origin (the console runs as a separate app). Origins
+// come from config; "*" allows any. With no allowed origins it is a no-op.
+func corsMiddleware(origins []string) func(http.Handler) http.Handler {
+	allowAll := false
+	allowed := make(map[string]bool, len(origins))
+	for _, o := range origins {
+		o = strings.TrimSpace(o)
+		if o == "*" {
+			allowAll = true
+		} else if o != "" {
+			allowed[o] = true
+		}
+	}
+	enabled := allowAll || len(allowed) > 0
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if enabled && origin != "" && (allowAll || allowed[origin]) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Add("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Idempotency-Key, Authorization")
+				w.Header().Set("Access-Control-Max-Age", "600")
+			}
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // authMiddleware verifies a bearer JWT (HS256) when auth is enabled and injects

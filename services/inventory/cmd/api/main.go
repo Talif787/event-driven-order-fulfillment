@@ -59,7 +59,7 @@ func run() error {
 		logger,
 	)
 	health := httppres.NewHealthHandlers(pool)
-	router := httppres.NewRouter(handlers, health, cfg.Auth, logger)
+	router := httppres.NewRouter(handlers, health, cfg.Auth, cfg.CORSAllowedOrigins, logger)
 	srv := httppres.NewServer(cfg, router)
 
 	logger.Info("inventory api starting", slog.String("addr", cfg.HTTPAddr), slog.String("env", cfg.Environment))

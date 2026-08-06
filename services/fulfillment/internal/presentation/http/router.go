@@ -10,7 +10,7 @@ import (
 
 // NewRouter wires routes and the middleware chain. Business routes require
 // authentication when enabled; health probes are always public.
-func NewRouter(h *Handlers, health *HealthHandlers, cfg config.AuthConfig, logger *slog.Logger) http.Handler {
+func NewRouter(h *Handlers, health *HealthHandlers, cfg config.AuthConfig, corsOrigins []string, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 
 	auth := authMiddleware(cfg, logger)
@@ -23,6 +23,7 @@ func NewRouter(h *Handlers, health *HealthHandlers, cfg config.AuthConfig, logge
 	mux.HandleFunc("GET /healthz", health.Live)
 
 	business := chain(mux,
+		corsMiddleware(corsOrigins),
 		correlationMiddleware,
 		recoveryMiddleware(logger),
 		loggingMiddleware(logger),
