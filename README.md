@@ -4,6 +4,13 @@ A production-oriented, event-driven order and fulfillment platform. This
 repository is being built in phases. Each phase is independently buildable and
 testable.
 
+## Web console
+
+A separate React console places orders and visualizes the full saga (reservation,
+payment, confirmation, shipment) as a live lifecycle timeline, and manages stock
+and shipments:
+[order-fulfillment-console](https://github.com/Talif787/order-fulfillment-console).
+
 ## Status
 
 Phase 1 (delivered): the Order service order-intake vertical slice.
