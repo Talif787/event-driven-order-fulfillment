@@ -53,7 +53,7 @@ func run() error {
 	service := app.NewService(postgres.NewShipmentRepository(pool), publisher, app.SystemClock{}, logger)
 	handlers := httppres.NewHandlers(service, logger)
 	health := httppres.NewHealthHandlers(pool)
-	router := httppres.NewRouter(handlers, health, cfg.Auth, logger)
+	router := httppres.NewRouter(handlers, health, cfg.Auth, cfg.CORSAllowedOrigins, logger)
 	srv := httppres.NewServer(cfg, router)
 
 	logger.Info("fulfillment api starting", slog.String("addr", cfg.HTTPAddr), slog.String("env", cfg.Environment))

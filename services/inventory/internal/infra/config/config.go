@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -11,13 +12,14 @@ import (
 // from the environment (Twelve-Factor), with safe defaults for local use and
 // explicit validation so the process fails fast on misconfiguration.
 type Config struct {
-	ServiceName string
-	Environment string
-	HTTPAddr    string
-	Database    DatabaseConfig
-	Telemetry   TelemetryConfig
-	Auth        AuthConfig
-	Timeouts    TimeoutConfig
+	ServiceName        string
+	Environment        string
+	HTTPAddr           string
+	CORSAllowedOrigins []string
+	Database           DatabaseConfig
+	Telemetry          TelemetryConfig
+	Auth               AuthConfig
+	Timeouts           TimeoutConfig
 }
 
 type DatabaseConfig struct {
@@ -50,9 +52,10 @@ type TimeoutConfig struct {
 // Load reads configuration from the environment and validates it.
 func Load() (Config, error) {
 	cfg := Config{
-		ServiceName: env("SERVICE_NAME", "inventory-service"),
-		Environment: env("ENVIRONMENT", "development"),
-		HTTPAddr:    env("HTTP_ADDR", ":8081"),
+		ServiceName:        env("SERVICE_NAME", "inventory-service"),
+		Environment:        env("ENVIRONMENT", "development"),
+		HTTPAddr:           env("HTTP_ADDR", ":8081"),
+		CORSAllowedOrigins: envList("CORS_ALLOWED_ORIGINS", nil),
 		Database: DatabaseConfig{
 			URL:             env("DATABASE_URL", "postgres://inventory:inventory@localhost:5433/inventory?sslmode=disable"),
 			MaxConns:        int32(envInt("DB_MAX_CONNS", 20)),
@@ -140,4 +143,19 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 		}
 	}
 	return fallback
+}
+
+func envList(key string, fallback []string) []string {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }

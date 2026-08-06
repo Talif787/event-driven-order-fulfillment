@@ -11,16 +11,17 @@ import (
 // Config is the fully resolved application configuration, derived from the
 // environment with safe local defaults and fail-fast validation.
 type Config struct {
-	ServiceName string
-	Environment string
-	HTTPAddr    string
-	MetricsAddr string
-	Database    DatabaseConfig
-	Kafka       KafkaConfig
-	Consumer    ConsumerConfig
-	Telemetry   TelemetryConfig
-	Auth        AuthConfig
-	Timeouts    TimeoutConfig
+	ServiceName        string
+	Environment        string
+	HTTPAddr           string
+	CORSAllowedOrigins []string
+	MetricsAddr        string
+	Database           DatabaseConfig
+	Kafka              KafkaConfig
+	Consumer           ConsumerConfig
+	Telemetry          TelemetryConfig
+	Auth               AuthConfig
+	Timeouts           TimeoutConfig
 }
 
 type DatabaseConfig struct {
@@ -64,10 +65,11 @@ type TimeoutConfig struct {
 // Load reads configuration from the environment and validates it.
 func Load() (Config, error) {
 	cfg := Config{
-		ServiceName: env("SERVICE_NAME", "fulfillment-service"),
-		Environment: env("ENVIRONMENT", "development"),
-		HTTPAddr:    env("HTTP_ADDR", ":8083"),
-		MetricsAddr: env("METRICS_ADDR", ":9090"),
+		ServiceName:        env("SERVICE_NAME", "fulfillment-service"),
+		Environment:        env("ENVIRONMENT", "development"),
+		HTTPAddr:           env("HTTP_ADDR", ":8083"),
+		CORSAllowedOrigins: envList("CORS_ALLOWED_ORIGINS", nil),
+		MetricsAddr:        env("METRICS_ADDR", ":9090"),
 		Database: DatabaseConfig{
 			URL:             env("DATABASE_URL", "postgres://fulfillment:fulfillment@localhost:5435/fulfillment?sslmode=disable"),
 			MaxConns:        int32(envInt("DB_MAX_CONNS", 20)),
