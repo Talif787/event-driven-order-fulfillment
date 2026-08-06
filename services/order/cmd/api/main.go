@@ -57,7 +57,7 @@ func run() error {
 
 	handlers := httpapi.NewHandlers(placeHandler, getHandler, logger)
 	health := httpapi.NewHealthHandlers(pool)
-	router := httpapi.NewRouter(handlers, health, cfg.Auth, logger)
+	router := httpapi.NewRouter(handlers, health, cfg.Auth, cfg.CORSAllowedOrigins, logger)
 	server := httpapi.NewServer(cfg, router)
 
 	logger.Info("order service listening", slog.String("addr", cfg.HTTPAddr), slog.String("env", cfg.Environment))

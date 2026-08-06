@@ -12,19 +12,20 @@ import (
 // from the environment (Twelve-Factor), with safe defaults for local use and
 // explicit validation so the process fails fast on misconfiguration.
 type Config struct {
-	ServiceName     string
-	Environment     string
-	HTTPAddr        string
-	MetricsAddr     string
-	DeadLetterTopic string
-	Database        DatabaseConfig
-	Telemetry       TelemetryConfig
-	Auth            AuthConfig
-	Timeouts        TimeoutConfig
-	Kafka           KafkaConfig
-	Relay           RelayConfig
-	Projector       ProjectorConfig
-	Saga            SagaConfig
+	ServiceName        string
+	Environment        string
+	HTTPAddr           string
+	MetricsAddr        string
+	DeadLetterTopic    string
+	CORSAllowedOrigins []string
+	Database           DatabaseConfig
+	Telemetry          TelemetryConfig
+	Auth               AuthConfig
+	Timeouts           TimeoutConfig
+	Kafka              KafkaConfig
+	Relay              RelayConfig
+	Projector          ProjectorConfig
+	Saga               SagaConfig
 }
 
 type SagaConfig struct {
@@ -80,11 +81,12 @@ type TimeoutConfig struct {
 // Load reads configuration from the environment and validates it.
 func Load() (Config, error) {
 	cfg := Config{
-		ServiceName:     env("SERVICE_NAME", "order-service"),
-		Environment:     env("ENVIRONMENT", "development"),
-		HTTPAddr:        env("HTTP_ADDR", ":8080"),
-		MetricsAddr:     env("METRICS_ADDR", ":9090"),
-		DeadLetterTopic: env("DEAD_LETTER_TOPIC", "dead-letter"),
+		ServiceName:        env("SERVICE_NAME", "order-service"),
+		Environment:        env("ENVIRONMENT", "development"),
+		HTTPAddr:           env("HTTP_ADDR", ":8080"),
+		MetricsAddr:        env("METRICS_ADDR", ":9090"),
+		DeadLetterTopic:    env("DEAD_LETTER_TOPIC", "dead-letter"),
+		CORSAllowedOrigins: envList("CORS_ALLOWED_ORIGINS", nil),
 		Database: DatabaseConfig{
 			URL:             env("DATABASE_URL", "postgres://order:order@localhost:5432/order?sslmode=disable"),
 			MaxConns:        int32(envInt("DB_MAX_CONNS", 20)),
