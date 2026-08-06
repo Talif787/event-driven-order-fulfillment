@@ -1,0 +1,22 @@
+{
+  "name": "order-fulfillment-backend",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  "forwardPorts": [8080, 8081, 8082, 8083],
+  "portsAttributes": {
+    "8080": { "label": "order-api", "onAutoForward": "notify" },
+    "8081": { "label": "inventory-api", "onAutoForward": "silent" },
+    "8082": { "label": "payment-api", "onAutoForward": "silent" },
+    "8083": { "label": "fulfillment-api", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "docker compose build",
+  "postStartCommand": "docker compose up -d",
+  "postAttachCommand": "bash .devcontainer/welcome.sh"
+}
